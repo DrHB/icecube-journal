@@ -149,3 +149,23 @@ checklink/cookies.txt
 
 # Quarto
 .quarto
+
+
+
+*.h5
+*.csv
+*.h5py
+
+.*.h5
+.*.csv
+.*.h5py
+*.sft
+*.hdf5
+*.hdf*
+data/
+*.parquet
+*.sft
+*.pth
+
+
+
