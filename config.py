@@ -29,7 +29,7 @@ class BASELINE_CONFIG:
     TRN_DATASET = IceCubeCasheDatasetV0
     VAL_DATASET = IceCubeCasheDatasetV0
     COLLAT_FN = collate_fn
-
+    
     OPT = torch.optim.AdamW
     LOSS_FUNC = nn.MSELoss
     SCHEDULER = get_cosine_schedule_with_warmup
