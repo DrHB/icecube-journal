@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "icecube"
+  site-url: "https://DrHB.github.io/icecube/"
+  description: "Kaggle Competition"
+  repo-branch: master
+  repo-url: "https://github.com/DrHB/spine/"

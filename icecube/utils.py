@@ -2,7 +2,7 @@
 
 # %% auto 0
 __all__ = ['get_size', 'reduce_mem_usage', 'save_folder', 'SaveModel', 'SaveModelMetric', 'SaveModelEpoch', 'fit',
-           'compare_events', 'good_luck']
+           'compare_events', 'get_batch_paths', 'angular_dist_score', 'get_score', 'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -16,6 +16,7 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from fastprogress.fastprogress import master_bar, progress_bar
+from typing import List
 
 # %% ../nbs/00_utils.ipynb 2
 def get_size(df):
@@ -215,25 +216,16 @@ def fit(
         # saving model if necessary
         save_md(metric_, model, i)
         val_loss /= mb.child.total
-
-        mb.write(
-            [
-                i,
-                f"{trn_loss:.6f}",
-                f"{val_loss:.6f}",
-                f"{metric_:.6f}",
-            ],
-            table=True,
-        )
-
-        pd.DataFrame(
+        res =         pd.DataFrame(
             {
                 "epoch": [i],
                 "train_loss": [trn_loss],
                 "valid_loss": [val_loss],
                 "metric": [metric_],
             }
-        ).to_csv(f"{Path(folder)/exp_name}_{i}.csv", index=False)
+        )
+        print(res)
+        res.to_csv(f"{Path(folder)/exp_name}_{i}.csv", index=False)
     print("Training done")
 
 
@@ -248,6 +240,52 @@ def compare_events(event_id: int, CFG, BATCH: int):
     event = event.merge(geometry, on="sensor_id")
     event_pth = pd.DataFrame.from_records(torch.load(CFG.SAVE_PATH/f'batch_{BATCH}' / f"{event_id}.pth")['event']).iloc[:, 1:]
     return np.all(event == event_pth)
+
+# %% ../nbs/00_utils.ipynb 8
+def get_batch_paths(
+    start: int,
+    end: int,
+    extension: str = "*.pth",
+    cache_dir: Path = Path("../data/cache"),
+) -> List[Path]:
+    """Get paths to all files in a range of batches"""
+    trn_path = []
+    for i in range(start, end + 1):
+        path = (cache_dir / f"batch_{i}").glob(extension)
+        trn_path.extend(list(path))
+    return trn_path
+
+
+def angular_dist_score(
+    az_true: torch.Tensor,
+    zen_true: torch.Tensor,
+    az_pred: torch.Tensor,
+    zen_pred: torch.Tensor,
+) -> torch.Tensor:
+    sa1 = torch.sin(az_true)
+    ca1 = torch.cos(az_true)
+    sz1 = torch.sin(zen_true)
+    cz1 = torch.cos(zen_true)
+
+    sa2 = torch.sin(az_pred)
+    ca2 = torch.cos(az_pred)
+    sz2 = torch.sin(zen_pred)
+    cz2 = torch.cos(zen_pred)
+
+    scalar_prod = sz1 * sz2 * (ca1 * ca2 + sa1 * sa2) + cz1 * cz2
+    scalar_prod = torch.clamp(scalar_prod, -1, 1)
+    return torch.mean(torch.abs(torch.acos(scalar_prod)))
+
+
+# calculte metric based on angular distance
+def get_score(y_hat, y):
+    return (
+        angular_dist_score(y[:, 0], y[:, 1], y_hat[:, 0], y_hat[:, 1])
+        .detach()
+        .cpu()
+        .numpy()
+    )
+
 
 # %% ../nbs/00_utils.ipynb 12
 def good_luck():
