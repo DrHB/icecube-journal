@@ -73,6 +73,7 @@ def main():
     parser.add_argument("--config_name", type=str, default=None)
     args = parser.parse_args()
     configs = eval(f"config.{args.config_name}")
+    print(f"Training with config: {configs.__dict__}")
     os.makedirs(configs.FOLDER/configs.EXP_NAME)
     train(configs)
 

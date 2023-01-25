@@ -7,11 +7,10 @@ from transformers.optimization import (
     get_linear_schedule_with_warmup,
     get_cosine_schedule_with_warmup,
 )
-from torch import nn
-from icecube.utils import get_score
-from icecube.models import IceCubeModelEncoderV1
-from icecube.utils import fit
 
+from icecube.models import IceCubeModelEncoderV1, LogCoshLoss
+from icecube.utils import fit, get_score
+from torch import nn
 
 class BASELINE_CONFIG:
     EXP_NAME = "EXP_00"
@@ -26,10 +25,11 @@ class BASELINE_CONFIG:
     EPOCHS = 10
     VAL_BATCH_RANGE = (3,6)
     TRN_BATCH_RANGE = (7,100)
+    
     TRN_DATASET = IceCubeCasheDatasetV0
     VAL_DATASET = IceCubeCasheDatasetV0
     COLLAT_FN = collate_fn
-    
+
     OPT = torch.optim.AdamW
     LOSS_FUNC = nn.MSELoss
     SCHEDULER = get_cosine_schedule_with_warmup
@@ -37,3 +37,10 @@ class BASELINE_CONFIG:
     METRIC = get_score
     DEVICE = "cuda:0"
     FIT_FUNC = fit
+
+
+class EXP_01(BASELINE_CONFIG):
+    EXP_NAME = "EXP_01"
+    LOSS_FUNC = LogCoshLoss
+    DEVICE = "cuda:0"
+    NUM_WORKERS = 1
