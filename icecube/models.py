@@ -49,7 +49,7 @@ class FeedForward(nn.Module):
 
 
 class IceCubeModelEncoderV0(nn.Module):
-    def __init__(slf):
+    def __init__(self):
         super().__init__()
         self.encoder = ContinuousTransformerWrapper(
             dim_in=6,

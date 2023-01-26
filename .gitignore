@@ -166,7 +166,12 @@ data/
 *.parquet
 *.sft
 *.pth
+*.mat 
 
-
+*.jpg
+.*.jpg
+*.tar
+*.tar.gz
+RESULTS/*
 
 GPU_training.ipynb

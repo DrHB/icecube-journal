@@ -1,5 +1,5 @@
 from pathlib import Path
-from icecube.dataset import IceCubeCasheDatasetV0
+from icecube.dataset import IceCubeCasheDatasetV0, IceCubeCasheDatasetV1
 from pathlib import Path
 from icecube.dataset import collate_fn
 import torch
@@ -8,7 +8,7 @@ from transformers.optimization import (
     get_cosine_schedule_with_warmup,
 )
 
-from icecube.models import IceCubeModelEncoderV1, LogCoshLoss
+from icecube.models import IceCubeModelEncoderV1, LogCoshLoss, IceCubeModelEncoderV0
 from icecube.utils import fit, get_score
 from torch import nn
 
@@ -16,9 +16,9 @@ class BASELINE_CONFIG:
     EXP_NAME = "EXP_00"
     FOLDER = Path("RESULTS")
     DATA_CACHE_DIR = Path("data/cache")
-    BATCH_SIZE = 1024
+    BATCH_SIZE = 512
     NUM_WORKERS = 16
-    PRESISTENT_WORKERS = True
+    PRESISTENT_WORKERS = False
     LR = 1e-3
     WD = 1e-5
     WARM_UP_PCT = 0.1
@@ -39,8 +39,12 @@ class BASELINE_CONFIG:
     FIT_FUNC = fit
 
 
-class EXP_01(BASELINE_CONFIG):
-    EXP_NAME = "EXP_01"
-    LOSS_FUNC = LogCoshLoss
+class EXP_02(BASELINE_CONFIG):
+    EXP_NAME = "EXP_02"
     DEVICE = "cuda:0"
-    NUM_WORKERS = 1
+    MODEL_NAME = IceCubeModelEncoderV0
+    TRN_DATASET = IceCubeCasheDatasetV0
+    VAL_DATASET = IceCubeCasheDatasetV0
+    BATCH_SIZE = 256 * 3
+    NUM_WORKERS = 20
+    LOSS_FUNC = LogCoshLoss

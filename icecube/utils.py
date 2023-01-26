@@ -177,11 +177,10 @@ def fit(
         model.train()  # set model for training
         for batch in progress_bar(train_dl, parent=mb):
             # putting batches to device
-            xb, mask, yb = batch["event"], batch["mask"], batch["label"]
-            xb, mask, yb = xb.to(device), mask.to(device), yb.to(device)
+            batch = {k: v.to(device) for k, v in batch.items()}
             with torch.cuda.amp.autocast():  # half precision
-                out = model(xb, mask=mask)  # forward pass
-                loss = loss_fn(out, yb)  # calulation loss
+                out = model(batch['event'], mask=batch['mask'])  # forward pass
+                loss = loss_fn(out, batch['label'])  # calulation loss
 
             trn_loss += loss.item()
 
@@ -201,15 +200,13 @@ def fit(
         # after epooch is done we can run a validation dataloder and see how are doing
         with torch.no_grad():
             for batch in progress_bar(valid_dl, parent=mb):
-                xb, mask, yb = batch
-                xb, mask, yb = batch["event"], batch["mask"], batch["label"]
-                xb, mask, yb = xb.to(device), mask.to(device), yb.to(device)
+                batch = {k: v.to(device) for k, v in batch.items()}
                 with torch.cuda.amp.autocast():  # half precision
-                    out = model(xb, mask=mask)  # forward pass
-                    loss = loss_fn(out, yb)  # calulation loss
+                    out = model(batch['event'], mask=batch['mask'])  # forward pass
+                    loss = loss_fn(out, batch['label'])  # calulation loss
                 val_loss += loss.item()
 
-                gt.append(yb.detach())
+                gt.append(batch['label'].detach())
                 pred.append(out.detach())
         # calculating metric
         metric_ = metric(torch.cat(pred), torch.cat(gt))
