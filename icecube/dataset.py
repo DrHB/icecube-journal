@@ -92,7 +92,8 @@ def collate_fn(batch):
 
     event = torch.nn.utils.rnn.pad_sequence(event, batch_first=True)
     mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True)
-    return {"event": event, "mask": mask, "label": torch.concat(label)}
+    batch = {"event": event, "mask": mask, "label": torch.concat(label)}
+    return batch
 
 
 # %% ../nbs/00_dataset.ipynb 8

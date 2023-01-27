@@ -16,7 +16,7 @@ class BASELINE_CONFIG:
     EXP_NAME = "EXP_00"
     FOLDER = Path("RESULTS")
     DATA_CACHE_DIR = Path("data/cache")
-    BATCH_SIZE = 512
+    BATCH_SIZE = 1024
     NUM_WORKERS = 16
     PRESISTENT_WORKERS = False
     LR = 1e-3
@@ -45,6 +45,4 @@ class EXP_02(BASELINE_CONFIG):
     MODEL_NAME = IceCubeModelEncoderV0
     TRN_DATASET = IceCubeCasheDatasetV0
     VAL_DATASET = IceCubeCasheDatasetV0
-    BATCH_SIZE = 256 * 3
-    NUM_WORKERS = 20
     LOSS_FUNC = LogCoshLoss
