@@ -21,7 +21,6 @@ class LogCoshLoss(nn.Module):
         return torch.mean(torch.log(torch.cosh(ey_t + 1e-12)))
 
 
-
 class MeanPoolingWithMask(nn.Module):
     def __init__(self):
         super(MeanPoolingWithMask, self).__init__()
@@ -38,13 +37,12 @@ class MeanPoolingWithMask(nn.Module):
 
         return x
 
+
 class FeedForward(nn.Module):
-    def __init__(self, dim, dim_out = None, mult = 4):
+    def __init__(self, dim, dim_out=None, mult=4):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(dim, dim * mult),
-            nn.GELU(),
-            nn.Linear(dim * mult, dim_out)
+            nn.Linear(dim, dim * mult), nn.GELU(), nn.Linear(dim * mult, dim_out)
         )
 
     def forward(self, x):
@@ -58,16 +56,14 @@ class IceCubeModelEncoderV0(nn.Module):
             dim_in=6,
             dim_out=128,
             max_seq_len=150,
-            attn_layers=Encoder(dim=128,
-                        depth=6, 
-                        heads=8),
+            attn_layers=Encoder(dim=128, depth=6, heads=8),
         )
 
-        #self.pool = MeanPoolingWithMask()
+        # self.pool = MeanPoolingWithMask()
         self.head = FeedForward(128, 2)
 
     def forward(self, x, mask):
-        x = self.encoder(x, mask = mask)
+        x = self.encoder(x, mask=mask)
         x = x.mean(dim=1)
         x = self.head(x)
         return x
@@ -80,34 +76,35 @@ class IceCubeModelEncoderV1(nn.Module):
             dim_in=6,
             dim_out=128,
             max_seq_len=150,
-            attn_layers=Encoder(dim=128,
-                        depth=6, 
-                        heads=8),
+            attn_layers=Encoder(dim=128, depth=6, heads=8),
         )
 
         self.pool = MeanPoolingWithMask()
         self.head = FeedForward(128, 2)
 
     def forward(self, x, mask):
-        x = self.encoder(x, mask = mask)
+        x = self.encoder(x, mask=mask)
         x = self.pool(x, mask)
         x = self.head(x)
         return x
 
 
-class always():
+class always:
     def __init__(self, val):
         self.val = val
+
     def __call__(self, *args, **kwargs):
         return self.val
 
-def l2norm(t, groups = 1):
-    t = rearrange(t, '... (g d) -> ... g d', g = groups)
-    t = F.normalize(t, p = 2, dim = -1)
-    return rearrange(t, '... g d -> ... (g d)')
+
+def l2norm(t, groups=1):
+    t = rearrange(t, "... (g d) -> ... g d", g=groups)
+    t = F.normalize(t, p=2, dim=-1)
+    return rearrange(t, "... g d -> ... (g d)")
+
 
 class TokenEmbedding(nn.Module):
-    def __init__(self, dim, num_tokens, l2norm_embed = False):
+    def __init__(self, dim, num_tokens, l2norm_embed=False):
         super().__init__()
         self.l2norm_embed = l2norm_embed
         self.emb = nn.Embedding(num_tokens, dim, padding_idx=0)
@@ -121,28 +118,27 @@ class TokenEmbedding(nn.Module):
 
 
 class IceCubeModelEncoderSensorEmbeddinng(nn.Module):
-    def __init__(self, dim=128):
+    def __init__(self, dim=128, in_features=14):
         super().__init__()
         self.token_emb = TokenEmbedding(dim, num_tokens=5161)
         self.post_norma = nn.LayerNorm(dim)
         self.token_emb.init_()
         self.encoder = ContinuousTransformerWrapper(
-            dim_in=6,
-            dim_out=128 + dim,
+            dim_in=in_features + dim,
+            dim_out=256,
             max_seq_len=150,
-            attn_layers=Encoder(dim=128 + dim,
-                        depth=6, 
-                        heads=8),
+            attn_layers=Encoder(dim=256, depth=6, heads=8),
         )
 
         self.pool = MeanPoolingWithMask()
-        self.head = FeedForward(128, 2)
+        self.head = FeedForward(256, 2)
 
-    def forward(self, x, mask, sensor_id):
+    def forward(self, batch):
+        x, mask, sensor_id = batch['event'], batch['mask'], batch['sensor_id']
         embed = self.token_emb(sensor_id)
         embed = self.post_norma(embed)
         x = torch.cat([x, embed], dim=-1)
-        x = self.encoder(x, mask = mask)
+        x = self.encoder(x, mask=mask)
         x = self.pool(x, mask)
         x = self.head(x)
         return x

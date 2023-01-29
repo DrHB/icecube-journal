@@ -1,16 +1,22 @@
 from pathlib import Path
-from icecube.dataset import HuggingFaceDatasetV0
+from icecube.dataset import HuggingFaceDatasetV0, HuggingFaceDatasetV1
 from pathlib import Path
-from icecube.utils import collate_fn
+from icecube.utils import collate_fn, collate_fn_v1
 import torch
 from transformers.optimization import (
     get_linear_schedule_with_warmup,
     get_cosine_schedule_with_warmup,
 )
 
-from icecube.models import IceCubeModelEncoderV1, LogCoshLoss, IceCubeModelEncoderV0
-from icecube.utils import fit_shuflle, get_score 
+from icecube.models import (
+    IceCubeModelEncoderV1,
+    LogCoshLoss,
+    IceCubeModelEncoderV0,
+    IceCubeModelEncoderSensorEmbeddinng,
+)
+from icecube.utils import fit_shuflle, get_score
 from torch import nn
+
 
 class BASELINE_HF:
     EXP_NAME = "EXP_00"
@@ -23,9 +29,9 @@ class BASELINE_HF:
     WD = 1e-5
     WARM_UP_PCT = 0.1
     EPOCHS = 3
-    TRN_BATCH_RANGE = (1,600)
-    VAL_BATCH_RANGE = (622,627)
-    
+    TRN_BATCH_RANGE = (1, 600)
+    VAL_BATCH_RANGE = (622, 627)
+
     TRN_DATASET = HuggingFaceDatasetV0
     VAL_DATASET = HuggingFaceDatasetV0
     COLLAT_FN = collate_fn
@@ -51,4 +57,12 @@ class BASELINE_HF_V2(BASELINE_HF_V1):
     LOSS_FUNC = LogCoshLoss
 
 
+class BASELINE_EMBED_V0(BASELINE_HF_V2):
+    BATCH_SIZE = 1024 + 256
+    EXP_NAME = "EXP_03"
+    LOSS_FUNC = LogCoshLoss
 
+    COLLAT_FN = collate_fn_v1
+    TRN_DATASET = HuggingFaceDatasetV1
+    VAL_DATASET = HuggingFaceDatasetV1
+    MODEL_NAME = IceCubeModelEncoderSensorEmbeddinng

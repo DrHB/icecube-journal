@@ -2,8 +2,8 @@
 
 # %% auto 0
 __all__ = ['get_size', 'reduce_mem_usage', 'save_folder', 'SaveModel', 'SaveModelMetric', 'SaveModelEpoch', 'fit', 'fit_shuflle',
-           'SaveModelAccelerate', 'fit_accelerate', 'compare_events', 'get_batch_paths', 'angular_dist_score',
-           'get_score', 'collate_fn', 'collate_fn_v1', 'good_luck']
+           'compare_events', 'get_batch_paths', 'angular_dist_score', 'get_score', 'collate_fn', 'collate_fn_v1',
+           'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -258,36 +258,17 @@ def fit_shuflle(
     scaler = torch.cuda.amp.GradScaler()  # this for half precision training
     save_md = save_md(folder, exp_name)
 
-    nums = [i for i in range(config.TRN_BATCH_RANGE[0], config.TRN_BATCH_RANGE[1])]
-    random.shuffle(nums)
-    trn_pth = [
-        load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet")
-        for i in nums
-    ]
-
     vld_pth = [
         load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet")
         for i in range(config.VAL_BATCH_RANGE[0], config.VAL_BATCH_RANGE[1])
     ]
-    
-    trn_pth = concatenate_datasets(trn_pth)
+
     vld_pth = concatenate_datasets(vld_pth)
 
     vld_ds = config.VAL_DATASET(vld_pth)
-    trn_ds = config.TRN_DATASET(trn_pth)
 
     valid_dl = DataLoader(
         vld_ds,
-        batch_size=config.BATCH_SIZE,
-        shuffle=False,
-        num_workers=config.NUM_WORKERS,
-        pin_memory=True,
-        persistent_workers=config.PRESISTENT_WORKERS,
-        collate_fn=config.COLLAT_FN,
-    )
-
-    train_dl = DataLoader(
-        trn_ds,
         batch_size=config.BATCH_SIZE,
         shuffle=False,
         num_workers=config.NUM_WORKERS,
@@ -300,13 +281,32 @@ def fit_shuflle(
         trn_loss, val_loss = 0.0, 0.0
         # shuffling the data before every epoch cheaper than shuffling the dataloader
 
+        nums = [i for i in range(config.TRN_BATCH_RANGE[0], config.TRN_BATCH_RANGE[1])]
+        random.shuffle(nums)
+        trn_pth = [
+            load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet") for i in nums
+        ]
+
+        trn_pth = concatenate_datasets(trn_pth)
+        trn_ds = config.TRN_DATASET(trn_pth)
+
+        train_dl = DataLoader(
+            trn_ds,
+            batch_size=config.BATCH_SIZE,
+            shuffle=False,
+            num_workers=config.NUM_WORKERS,
+            pin_memory=True,
+            persistent_workers=config.PRESISTENT_WORKERS,
+            collate_fn=config.COLLAT_FN,
+        )
+
         trn_n, val_n = len(train_dl.dataset), len(valid_dl.dataset)
         model.train()  # set model for training
         for batch in progress_bar(train_dl, parent=mb):
             # putting batches to device
             batch = {k: v.to(device) for k, v in batch.items()}
             with torch.cuda.amp.autocast():  # half precision
-                out = model(batch["event"], mask=batch["mask"])  # forward pass
+                out = model(batch)  # forward pass
                 loss = loss_fn(out, batch["label"])  # calulation loss
 
             trn_loss += loss.item()
@@ -329,7 +329,7 @@ def fit_shuflle(
             for batch in progress_bar(valid_dl, parent=mb):
                 batch = {k: v.to(device) for k, v in batch.items()}
                 with torch.cuda.amp.autocast():  # half precision
-                    out = model(batch["event"], mask=batch["mask"])  # forward pass
+                    out = model(batch)  # forward pass
                     loss = loss_fn(out, batch["label"])  # calulation loss
                 val_loss += loss.item()
 
@@ -349,97 +349,6 @@ def fit_shuflle(
             }
         )
         print(res)
-        res.to_csv(f"{Path(folder)/exp_name}_{i}.csv", index=False)
-        gc.collect()
-    print("Training done")
-
-
-class SaveModelAccelerate:
-    def __init__(self, folder, exp_name, best=-np.inf):
-        self.best = best
-        self.folder = Path(folder)
-        self.exp_name = exp_name
-
-    def __call__(self, score, accelerator, epoch):
-        self.best = score
-        print(f"Better model found at epoch {epoch} with value: {self.best}.")
-        accelerator.save_state(f"{self.folder/self.exp_name}_{epoch}.pth")
-
-
-def fit_accelerate(
-    epochs,
-    model,
-    train_dl,
-    valid_dl,
-    loss_fn,
-    opt,
-    metric,
-    num_workers,
-    folder="models",
-    exp_name="exp_00",
-    device=None,
-    sched=None,
-    save_md=SaveModelAccelerate,
-):
-
-    os.makedirs(folder, exist_ok=True)
-
-    mb = master_bar(range(epochs))
-    mb.write(["epoch", "train_loss", "valid_loss", "val_metric"], table=True)
-    save_md = save_md(folder, exp_name)
-
-    accelerator = Accelerator(cpu=num_workers, mixed_precision="fp16")
-    model = model.to(accelerator.device)
-    model, opt, train_dl, valid_dl, sched = accelerator.prepare(
-        model, opt, train_dl, valid_dl, sched
-    )
-
-    for i in mb:  # iterating  epoch
-        trn_loss, val_loss = 0.0, 0.0
-        trn_n, val_n = len(train_dl.dataset), len(valid_dl.dataset)
-        model.train()  # set model for training
-        for batch in progress_bar(train_dl, parent=mb):
-            # putting batches to device
-            batch = {k: v.to(device) for k, v in batch.items()}
-            out = model(batch["event"], mask=batch["mask"])  # forward pass
-            loss = loss_fn(out, batch["label"])  # calulation loss
-            trn_loss += loss.item()
-            accelerator.backward(loss)
-            opt.step()
-            sched.step()
-            opt.zero_grad()
-        trn_loss /= mb.child.total
-
-        # putting model in eval mode
-        model.eval()
-        gt = []
-        pred = []
-        # after epooch is done we can run a validation dataloder and see how are doing
-        for batch in progress_bar(valid_dl, parent=mb):
-            batch = {k: v.to(device) for k, v in batch.items()}
-            with torch.no_grad():  # half precision
-                out = model(batch["event"], mask=batch["mask"])  # forward pass
-                loss = loss_fn(out, batch["label"])  # calulation loss
-            val_loss += loss.item()
-            predictions, references = accelerator.gather_for_metrics(
-                (out, batch["label"])
-            )
-            gt.append(batch["label"])
-            pred.append(predictions)
-        # calculating metric
-        metric_ = metric(torch.cat(pred), torch.cat(gt))
-        # saving model if necessary
-        save_md(metric_, model, i)
-        val_loss /= mb.child.total
-        res = pd.DataFrame(
-            {
-                "epoch": [i],
-                "train_loss": [trn_loss],
-                "valid_loss": [val_loss],
-                "metric": [metric_],
-            }
-        )
-        accelerator.print(res)
         res.to_csv(f"{Path(folder)/exp_name}_{i}.csv", index=False)
         gc.collect()
     print("Training done")
