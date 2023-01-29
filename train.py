@@ -3,44 +3,10 @@ from icecube.utils import get_batch_paths
 from torch.utils.data import DataLoader
 import config
 from pdb import set_trace
-from icecube.utils import fit
 import os
 
 
 def train(cfg):
-    trn_ds = cfg.TRN_DATASET(
-        get_batch_paths(
-            cfg.TRN_BATCH_RANGE[0],
-            cfg.TRN_BATCH_RANGE[1],
-            cache_dir=cfg.DATA_CACHE_DIR,
-        )
-    )
-    vld_ds  = cfg.VAL_DATASET(
-        get_batch_paths(
-            cfg.VAL_BATCH_RANGE[0],
-            cfg.VAL_BATCH_RANGE[1],
-            cache_dir=cfg.DATA_CACHE_DIR,
-        )
-    )
-    trn_dl = DataLoader(
-        trn_ds,
-        batch_size=cfg.BATCH_SIZE,
-        shuffle=True,
-        num_workers=cfg.NUM_WORKERS,
-        pin_memory=True,
-        persistent_workers=cfg.PRESISTENT_WORKERS,
-        collate_fn=cfg.COLLAT_FN,
-    )
-    vld_dl = DataLoader(
-        vld_ds,
-        batch_size=cfg.BATCH_SIZE,
-        shuffle=False,
-        num_workers=cfg.NUM_WORKERS,
-        pin_memory=True,
-        persistent_workers=cfg.PRESISTENT_WORKERS,
-        collate_fn=cfg.COLLAT_FN,
-    )
-
     custom_model = cfg.MODEL_NAME()
     opt = cfg.OPT(
         custom_model.parameters(), lr=cfg.LR, weight_decay=cfg.WD
@@ -53,14 +19,13 @@ def train(cfg):
     )
 
 
-    fit(
+    cfg.FIT_FUNC(
         epochs=cfg.EPOCHS,
         model=custom_model,
-        train_dl=trn_dl,
-        valid_dl=vld_dl,
         loss_fn=loss_func,
         opt=opt,
         metric=cfg.METRIC,
+        config = cfg,
         folder=cfg.FOLDER/cfg.EXP_NAME,
         exp_name=f"{cfg.EXP_NAME}",
         device=cfg.DEVICE,
