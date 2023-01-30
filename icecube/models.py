@@ -2,7 +2,7 @@
 
 # %% auto 0
 __all__ = ['LogCoshLoss', 'MeanPoolingWithMask', 'FeedForward', 'IceCubeModelEncoderV0', 'IceCubeModelEncoderV1', 'always',
-           'l2norm', 'TokenEmbedding', 'IceCubeModelEncoderSensorEmbeddinng']
+           'l2norm', 'TokenEmbedding', 'IceCubeModelEncoderSensorEmbeddinng', 'IceCubeModelEncoderSensorEmbeddinngV1']
 
 # %% ../nbs/01_models.ipynb 1
 import torch
@@ -142,4 +142,31 @@ class IceCubeModelEncoderSensorEmbeddinng(nn.Module):
         x = self.pool(x, mask)
         x = self.head(x)
         return x
+
+class IceCubeModelEncoderSensorEmbeddinngV1(nn.Module):
+    def __init__(self, dim=128, in_features=6):
+        super().__init__()
+        self.token_emb = TokenEmbedding(dim, num_tokens=5161)
+        self.post_norma = nn.LayerNorm(dim)
+        self.token_emb.init_()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_in=in_features + dim,
+            dim_out=256,
+            max_seq_len=150,
+            attn_layers=Encoder(dim=256, depth=6, heads=8),
+        )
+
+        self.pool = MeanPoolingWithMask()
+        self.head = FeedForward(256, 2)
+
+    def forward(self, batch):
+        x, mask, sensor_id = batch['event'], batch['mask'], batch['sensor_id']
+        embed = self.token_emb(sensor_id)
+        embed = self.post_norma(embed)
+        x = torch.cat([x, embed], dim=-1)
+        x = self.encoder(x, mask=mask)
+        x = self.pool(x, mask)
+        x = self.head(x)
+        return x
+
 
