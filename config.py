@@ -1,5 +1,10 @@
 from pathlib import Path
-from icecube.dataset import HuggingFaceDatasetV0, HuggingFaceDatasetV1, HuggingFaceDatasetV2
+from icecube.dataset import (
+    HuggingFaceDatasetV0,
+    HuggingFaceDatasetV1,
+    HuggingFaceDatasetV2,
+    HuggingFaceDatasetV3,
+)
 from pathlib import Path
 from icecube.utils import collate_fn, collate_fn_v1
 import torch
@@ -13,7 +18,8 @@ from icecube.models import (
     LogCoshLoss,
     IceCubeModelEncoderV0,
     IceCubeModelEncoderSensorEmbeddinng,
-    IceCubeModelEncoderSensorEmbeddinngV1
+    IceCubeModelEncoderSensorEmbeddinngV1,
+    IceCubeModelEncoderSensorEmbeddinngV2,
 )
 from icecube.utils import fit_shuflle, get_score
 from torch import nn
@@ -68,6 +74,7 @@ class BASELINE_EMBED_V0(BASELINE_HF_V2):
     VAL_DATASET = HuggingFaceDatasetV1
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinng
 
+
 class BASELINE_EMBED_V1(BASELINE_HF_V2):
     EXP_NAME = "EXP_04"
 
@@ -75,3 +82,12 @@ class BASELINE_EMBED_V1(BASELINE_HF_V2):
     TRN_DATASET = HuggingFaceDatasetV2
     VAL_DATASET = HuggingFaceDatasetV2
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV1
+
+
+class BASELINE_EMBED_V2(BASELINE_HF_V2):
+    EXP_NAME = "EXP_05"
+
+    COLLAT_FN = collate_fn_v1
+    TRN_DATASET = HuggingFaceDatasetV3
+    VAL_DATASET = HuggingFaceDatasetV3
+    MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV2
