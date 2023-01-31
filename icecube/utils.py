@@ -3,7 +3,7 @@
 # %% auto 0
 __all__ = ['get_size', 'reduce_mem_usage', 'save_folder', 'SaveModel', 'SaveModelMetric', 'SaveModelEpoch', 'fit', 'fit_shuflle',
            'compare_events', 'get_batch_paths', 'angular_dist_score', 'get_score', 'collate_fn', 'collate_fn_v1',
-           'good_luck']
+           'collate_fn_graphv0', 'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -424,7 +424,7 @@ def collate_fn(batch):
 
 
 def collate_fn_v1(batch):
-    
+
     event = [x["event"] for x in batch]
     mask = [x["mask"] for x in batch]
     label = [x["label"] for x in batch]
@@ -432,10 +432,35 @@ def collate_fn_v1(batch):
 
     event = torch.nn.utils.rnn.pad_sequence(event, batch_first=True)
     mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True)
-    sensor_id  = torch.nn.utils.rnn.pad_sequence(sensor_id, batch_first=True)
-    batch = {"event": event, "mask": mask, "label": torch.stack(label), "sensor_id": sensor_id}
+    sensor_id = torch.nn.utils.rnn.pad_sequence(sensor_id, batch_first=True)
+    batch = {
+        "event": event,
+        "mask": mask,
+        "label": torch.stack(label),
+        "sensor_id": sensor_id,
+    }
     return batch
 
+
+def collate_fn_graphv0(batch):
+
+    event = [x["event"] for x in batch]
+    mask = [x["mask"] for x in batch]
+    label = [x["label"] for x in batch]
+    distance_matrix = [x["distance_matrix"] for x in batch]
+    adjecent_matrix = [x["adjecent_matrix"] for x in batch]
+
+    event = torch.nn.utils.rnn.pad_sequence(event, batch_first=True)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True)
+
+    batch = {
+        "event": event,
+        "mask": mask,
+        "label": torch.stack(label),
+        "distance_matrix": torch.stack(distance_matrix),
+        "adjecent_matrix": torch.stack(adjecent_matrix),
+    }
+    return batch
 
 
 # %% ../nbs/00_utils.ipynb 12

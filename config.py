@@ -4,9 +4,11 @@ from icecube.dataset import (
     HuggingFaceDatasetV1,
     HuggingFaceDatasetV2,
     HuggingFaceDatasetV3,
+    HuggingFaceDatasetGraphV0,
 )
+
 from pathlib import Path
-from icecube.utils import collate_fn, collate_fn_v1
+from icecube.utils import collate_fn, collate_fn_v1, collate_fn_graphv0
 import torch
 from transformers.optimization import (
     get_linear_schedule_with_warmup,
@@ -20,6 +22,7 @@ from icecube.models import (
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
+    IceCubeModelEncoderMAT,
 )
 from icecube.utils import fit_shuflle, get_score
 from torch import nn
@@ -91,3 +94,15 @@ class BASELINE_EMBED_V2(BASELINE_HF_V2):
     TRN_DATASET = HuggingFaceDatasetV3
     VAL_DATASET = HuggingFaceDatasetV3
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV2
+
+
+class MATGRAPH(BASELINE_HF_V2):
+    EXP_NAME = "EXP_06"
+    LOSS_FUNC = LogCoshLoss
+    TRN_DATASET = HuggingFaceDatasetGraphV0
+    VAL_DATASET = HuggingFaceDatasetGraphV0
+    MODEL_NAME = IceCubeModelEncoderMAT
+
+    TRN_BATCH_RANGE = (1, 100)
+    VAL_BATCH_RANGE = (110, 115)
+    EPOCHS = 10
