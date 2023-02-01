@@ -178,21 +178,20 @@ class HuggingFaceDatasetV1(Dataset):
             self.geom_max - self.geom_min
         )
 
-        # this is done in order to shift sensor id from 0 to 1 
+        # this is done in order to shift sensor id from 0 to 1
         # since paddding index is 0
         sensor_id = event["sensor_id"].values + 1
 
-
-        #feature engineering
+        # feature engineering
         event["w1"] = event["charge"] * event["time"]
         event["w0"] = event["charge"] - event["w1"]
-        
-        event['wx0'] = event.x * event.w0
-        event['wy0'] = event.y * event.w0
-        event['wz0'] = event.z * event.w0
-        event['wx1'] = event.x * event.w1
-        event['wy1'] = event.y * event.w1
-        event['wz1'] = event.z * event.w1
+
+        event["wx0"] = event.x * event.w0
+        event["wy0"] = event.y * event.w0
+        event["wz0"] = event.z * event.w0
+        event["wx1"] = event.x * event.w1
+        event["wy1"] = event.y * event.w1
+        event["wz1"] = event.z * event.w1
 
         event = event[
             [
@@ -270,12 +269,9 @@ class HuggingFaceDatasetV2(Dataset):
             self.geom_max - self.geom_min
         )
 
-        
-
-        # this is done in order to shift sensor id from 0 to 1 
+        # this is done in order to shift sensor id from 0 to 1
         # since paddding index is 0
         sensor_id = event["sensor_id"].values + 1
-
 
         event = event[
             [
@@ -345,12 +341,12 @@ class HuggingFaceDatasetV3(Dataset):
             self.geom_max - self.geom_min
         )
 
-        # this is done in order to shift sensor id from 0 to 1 
+        # this is done in order to shift sensor id from 0 to 1
         # since paddding index is 0
         sensor_id = event["sensor_id"].values + 1
 
         event["charge"] = np.log10(event["charge"])
-        
+
         event = event[
             [
                 "time",

@@ -102,7 +102,8 @@ class MATGRAPH(BASELINE_HF_V2):
     TRN_DATASET = HuggingFaceDatasetGraphV0
     VAL_DATASET = HuggingFaceDatasetGraphV0
     MODEL_NAME = IceCubeModelEncoderMAT
+    COLLAT_FN = collate_fn_graphv0
 
     TRN_BATCH_RANGE = (1, 100)
-    VAL_BATCH_RANGE = (110, 115)
+    VAL_BATCH_RANGE = (622, 627)
     EPOCHS = 10

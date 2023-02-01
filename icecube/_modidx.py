@@ -157,4 +157,5 @@ d = { 'settings': { 'branch': 'master',
                                'icecube.utils.get_size': ('utils.html#get_size', 'icecube/utils.py'),
                                'icecube.utils.good_luck': ('utils.html#good_luck', 'icecube/utils.py'),
                                'icecube.utils.reduce_mem_usage': ('utils.html#reduce_mem_usage', 'icecube/utils.py'),
-                               'icecube.utils.save_folder': ('utils.html#save_folder', 'icecube/utils.py')}}}
+                               'icecube.utils.save_folder': ('utils.html#save_folder', 'icecube/utils.py'),
+                               'icecube.utils.save_pred_as_csv': ('utils.html#save_pred_as_csv', 'icecube/utils.py')}}}
