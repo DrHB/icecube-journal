@@ -23,6 +23,7 @@ from icecube.models import (
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
     IceCubeModelEncoderMAT,
+    IceCubeModelEncoderMATMasked
 )
 from icecube.utils import fit_shuflle, get_score
 from torch import nn
@@ -107,3 +108,10 @@ class MATGRAPH(BASELINE_HF_V2):
     TRN_BATCH_RANGE = (1, 100)
     VAL_BATCH_RANGE = (622, 627)
     EPOCHS = 10
+
+
+class MATGRAPHV2(MATGRAPH):
+    EXP_NAME = "EXP_07"
+    MODEL_NAME = IceCubeModelEncoderMATMasked
+
+

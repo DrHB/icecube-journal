@@ -4,7 +4,8 @@
 __all__ = ['DIST_KERNELS', 'LogCoshLoss', 'MeanPoolingWithMask', 'FeedForward', 'IceCubeModelEncoderV0', 'IceCubeModelEncoderV1',
            'always', 'l2norm', 'TokenEmbedding', 'IceCubeModelEncoderSensorEmbeddinng',
            'IceCubeModelEncoderSensorEmbeddinngV1', 'TokenEmbeddingV2', 'IceCubeModelEncoderSensorEmbeddinngV2',
-           'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT', 'IceCubeModelEncoderMAT']
+           'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT', 'MATMaskedPool',
+           'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked']
 
 # %% ../nbs/01_models.ipynb 1
 import torch
@@ -399,6 +400,7 @@ class MAT(nn.Module):
         self.norm_out = nn.LayerNorm(model_dim)
         self.ff_out = FeedForward(model_dim, dim_out)
 
+
     def forward(self, batch):
 
         x = batch["event"]
@@ -420,6 +422,72 @@ class MAT(nn.Module):
         return x
 
 
+class MATMaskedPool(nn.Module):
+    def __init__(
+        self,
+        *,
+        dim_in,
+        model_dim,
+        dim_out,
+        depth,
+        heads=8,
+        Lg=0.5,
+        Ld=0.5,
+        La=1,
+        dist_kernel_fn="exp",
+    ):
+        super().__init__()
+
+        self.embed_to_model = nn.Linear(dim_in, model_dim)
+        self.layers = nn.ModuleList([])
+
+        for _ in range(depth):
+            layer = nn.ModuleList(
+                [
+                    Residual(
+                        PreNorm(
+                            model_dim,
+                            Attention(
+                                model_dim,
+                                heads=heads,
+                                Lg=Lg,
+                                Ld=Ld,
+                                La=La,
+                                dist_kernel_fn=dist_kernel_fn,
+                            ),
+                        )
+                    ),
+                    Residual(PreNorm(model_dim, FeedForwardV1(model_dim))),
+                ]
+            )
+            self.layers.append(layer)
+
+        self.norm_out = nn.LayerNorm(model_dim)
+        self.pool = MeanPoolingWithMask()
+        self.ff_out = FeedForward(model_dim, dim_out)
+
+
+    def forward(self, batch):
+
+        x = batch["event"]
+        mask = batch["mask"]
+        adjacency_mat = batch["adjecent_matrix"]
+        distance_mat = batch["distance_matrix"]
+
+        x = self.embed_to_model(x)
+
+        for (attn, ff) in self.layers:
+            x = attn(
+                x, mask=mask, adjacency_mat=adjacency_mat, distance_mat=distance_mat
+            )
+            x = ff(x)
+
+        x = self.norm_out(x)
+        x = self.pool(x, mask=mask)
+        x = self.ff_out(x)
+        return x
+
+
 class IceCubeModelEncoderMAT(nn.Module):
     def __init__(self, dim=128, in_features=6):
         super().__init__()
@@ -436,4 +504,23 @@ class IceCubeModelEncoderMAT(nn.Module):
 
     def forward(self, batch):
         return self.md(batch)
+
+
+class IceCubeModelEncoderMATMasked(nn.Module):
+    def __init__(self, dim=128, in_features=6):
+        super().__init__()
+        self.md = MATMaskedPool(
+            dim_in=6,
+            model_dim=128,
+            dim_out=2,
+            depth=6,
+            Lg=0.5,  # lambda (g)raph - weight for adjacency matrix
+            Ld=0.5,  # lambda (d)istance - weight for distance matrix
+            La=1,  # lambda (a)ttention - weight for usual self-attention
+            dist_kernel_fn="exp",  # distance kernel fn - either 'exp' or 'softmax'
+        )
+
+    def forward(self, batch):
+        return self.md(batch)
+
 
