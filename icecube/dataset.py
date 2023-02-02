@@ -468,7 +468,7 @@ class HuggingFaceDatasetGraphV0(Dataset):
 
 
 class HuggingFaceDatasetGraphV1(Dataset):
-    def __init__(self, ds, min_adj_distance=0.015, max_events=100):
+    def __init__(self, ds, min_adj_distance=0.05, max_events=100):
         self.ds = ds
         self.max_events = max_events
         self.mad = min_adj_distance
@@ -540,6 +540,6 @@ class HuggingFaceDatasetGraphV1(Dataset):
 
 
 
-# %% ../nbs/00_dataset.ipynb 9
+# %% ../nbs/00_dataset.ipynb 10
 def good_luck():
     return True

@@ -98,6 +98,7 @@ class BASELINE_EMBED_V2(BASELINE_HF_V2):
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV2
 
 
+
 class MATGRAPH(BASELINE_HF_V2):
     EXP_NAME = "EXP_06"
     LOSS_FUNC = LogCoshLoss
@@ -122,5 +123,14 @@ class MATGRAPHV3(MATGRAPHV2):
     VAL_DATASET = HuggingFaceDatasetGraphV1
 
 
+class BASELINE_EMBED_V3(BASELINE_HF_V2):
+    EXP_NAME = "EXP_09"
 
+    COLLAT_FN = collate_fn_v1
+    TRN_DATASET = HuggingFaceDatasetV3
+    VAL_DATASET = HuggingFaceDatasetV3
+    MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV2
+    TRN_BATCH_RANGE = (1, 100)
+    VAL_BATCH_RANGE = (622, 627)
+    EPOCHS = 10
 

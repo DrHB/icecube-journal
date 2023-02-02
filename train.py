@@ -4,9 +4,23 @@ from torch.utils.data import DataLoader
 import config
 from pdb import set_trace
 import os
+import random
+import numpy as np
+import torch
+
+def seed(seed=0):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 
 def train(cfg):
+    seed()
     custom_model = cfg.MODEL_NAME()
     opt = cfg.OPT(
         custom_model.parameters(), lr=cfg.LR, weight_decay=cfg.WD
@@ -17,6 +31,7 @@ def train(cfg):
         num_warmup_steps=cfg.WARM_UP_PCT * cfg.EPOCHS,
         num_training_steps=cfg.EPOCHS,
     )
+
 
 
     cfg.FIT_FUNC(
