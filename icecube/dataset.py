@@ -3,7 +3,8 @@
 # %% auto 0
 __all__ = ['load_data', 'IceCubeCasheDatasetV0', 'IceCubeCasheDatasetV1', 'HuggingFaceDatasetV0', 'normalize',
            'HuggingFaceDatasetV1', 'HuggingFaceDatasetV2', 'HuggingFaceDatasetV3', 'get_distance_matrix',
-           'get_distance_matrix_for_indices', 'get_distance_matrix_from_csv', 'HuggingFaceDatasetGraphV0', 'good_luck']
+           'get_distance_matrix_for_indices', 'get_distance_matrix_from_csv', 'HuggingFaceDatasetGraphV0',
+           'HuggingFaceDatasetGraphV1', 'good_luck']
 
 # %% ../nbs/00_dataset.ipynb 1
 from torch.utils.data import Dataset, DataLoader
@@ -431,6 +432,77 @@ class HuggingFaceDatasetGraphV0(Dataset):
         )
 
         event["charge"] = np.log10(event["charge"])
+
+        # getting distance matrix for event
+        distance_matrix = get_distance_matrix_for_indices(
+            self.distance_matrix_, event["sensor_id"].values
+        )
+
+        dmx = torch.zeros((self.max_events, self.max_events), dtype=torch.float32)
+        dmx[: distance_matrix.shape[0], : distance_matrix.shape[1]] = distance_matrix
+        adjecent_matrix = (dmx < self.mad).type(torch.float32)
+
+        event = event[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+            ]
+        ].values
+        mask = np.ones(len(event), dtype=bool)
+        label = np.array([item["azimuth"], item["zenith"]], dtype=np.float32)
+
+        batch = deepcopy(
+            {
+                "distance_matrix": dmx,
+                "adjecent_matrix": adjecent_matrix,
+                "event": torch.tensor(event, dtype=torch.float32),
+                "mask": torch.tensor(mask),
+                "label": torch.tensor(label),
+            }
+        )
+        return batch
+
+
+class HuggingFaceDatasetGraphV1(Dataset):
+    def __init__(self, ds, min_adj_distance=0.015, max_events=100):
+        self.ds = ds
+        self.max_events = max_events
+        self.mad = min_adj_distance
+        self.distance_matrix_ = get_distance_matrix_from_csv()
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        item = self.ds[idx]
+
+        event = pd.DataFrame(item)[
+            [
+                "sensor_id",
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+            ]
+        ].astype(np.float32)
+        if self.max_events:
+            event = event[: self.max_events]
+        # in this way the time start at 0 and end at 1
+        event["time"] = (event['time'] - 1.0e04) / 3.0e4
+
+        # normalize the x,y,z coordinates of geomatry
+        # TO DO add this in to preprocessing
+        event['x'] /=500
+        event['y'] /=500
+        event['z'] /=500
+
+        event["charge"] = np.log10(event["charge"])/3.0
 
         # getting distance matrix for event
         distance_matrix = get_distance_matrix_for_indices(

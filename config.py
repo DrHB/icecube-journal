@@ -5,6 +5,7 @@ from icecube.dataset import (
     HuggingFaceDatasetV2,
     HuggingFaceDatasetV3,
     HuggingFaceDatasetGraphV0,
+    HuggingFaceDatasetGraphV1
 )
 
 from pathlib import Path
@@ -113,5 +114,13 @@ class MATGRAPH(BASELINE_HF_V2):
 class MATGRAPHV2(MATGRAPH):
     EXP_NAME = "EXP_07"
     MODEL_NAME = IceCubeModelEncoderMATMasked
+
+class MATGRAPHV3(MATGRAPHV2):
+    EXP_NAME = "EXP_08"
+    MODEL_NAME = IceCubeModelEncoderMATMasked
+    TRN_DATASET = HuggingFaceDatasetGraphV1
+    VAL_DATASET = HuggingFaceDatasetGraphV1
+
+
 
 
