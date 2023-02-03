@@ -18,6 +18,11 @@
 |EXP_10 |`NG`| same as `EXP_09`  but with `SigmoidRange`  |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V4`|`(1, 100)` |
 |EXP_11 |`NG`| same as `EXP_09` but extended `max_events` to `160` from `100` |`(1, 100)` |
 
+
+```python
+#embeding dimension changed from 150 to 196 for transformer ecnoder
+```
+
 https://www.kaggle.com/code/solverworld/icecube-neutrino-path-least-squares-1-214
 
 https://github.com/lucidrains/En-transformer
