@@ -299,8 +299,13 @@ def fit_shuflle(
         persistent_workers=config.PRESISTENT_WORKERS,
         collate_fn=config.COLLAT_FN,
     )
-    wandb.init(project="ice", entity="kaggle-hi", name=config.EXP_NAME)
-    wandb.config = get_config_as_dict(config)
+    
+    wandb.init(
+        project="ice",
+        entity="kaggle-hi",
+        name=config.EXP_NAME,
+        config=get_config_as_dict(config),
+    )
     wandb.watch(model)
 
     for i in mb:  # iterating  epoch
@@ -369,6 +374,9 @@ def fit_shuflle(
         )
         # saving model if necessary
         save_md(metric_, model, i)
+
+        val_loss /= mb.child.total
+
         wandb.log(
             {
                 "epoch": i,
@@ -377,7 +385,7 @@ def fit_shuflle(
                 "metric": metric_,
             }
         )
-        val_loss /= mb.child.total
+
         res = pd.DataFrame(
             {
                 "epoch": [i],

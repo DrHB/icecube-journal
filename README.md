@@ -14,7 +14,9 @@
 |EXP_06|`1.286` | In this experiment, I am trying to use graph `Transformer`, which takes in to account `adjacent matrix` and `distance_matrix`. `adjacent matrix` is calculated by taking `sensor_id` which are `0.015` away from each other (`note`: this might needs to be tuned). `log10` normalization for the charge, `time` is normalized between `1` and `0`, `x`, `y` and `z` are normalized between `0` and `1`. As per usual i restricted to `100` rows per `event`. `6` blocks of `encoders` with `dim=128` and out `2`. note: `Lg=0.5` - weight of adjacent matrix, `Ld=0.5` - weight of distance matrix. Need to optmized, Pooling right now is not done on `mask` but on `x = x.mean(dim=-2)` -> needs to be optmized. Either by testing on `mask` |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name MATGRAPH`|`(1, 100)` |
 |EXP_07 |`1.275`| same as `EXP_06` but `pooling` is done now on `mask` using `MeanPoolingWithMask`  |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name MATGRAPHV2`|`(1, 100)` |
 |EXP_08 |`~ 1.275`| same as `EXP_06` but `pooling` is done now on `mask` using `MeanPoolingWithMask` , `x`, `y` and `z` are normalized by dividing by `500`,  `time` is normalized  `(event['time'] - 1.0e04) / 3.0e4` and `charge` `np.log10(event["charge"])/3.0`  and  `adjacent matrix` is calculated by taking `sensor_id` which are `0.05` away from each other |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name MATGRAPHV3`|`(1, 100)` |
-|EXP_09 || same as `EXP_05`  but with `(1, 100)`  just to have benchmark for small data training  |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V3`|`(1, 100)` |
+|EXP_09 |`1.177`| same as `EXP_05`  but with `(1, 100)`  just to have benchmark for small data training  |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V3`|`(1, 100)` |
+|EXP_10 |`NG`| same as `EXP_09`  but with `SigmoidRange`  |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V4`|`(1, 100)` |
+|EXP_11 |`NG`| same as `EXP_09` but extended `max_events` to `160` from `100` |`(1, 100)` |
 
 https://www.kaggle.com/code/solverworld/icecube-neutrino-path-least-squares-1-214
 

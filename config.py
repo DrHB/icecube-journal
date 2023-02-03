@@ -4,6 +4,7 @@ from icecube.dataset import (
     HuggingFaceDatasetV1,
     HuggingFaceDatasetV2,
     HuggingFaceDatasetV3,
+    HuggingFaceDatasetV4,
     HuggingFaceDatasetGraphV0,
     HuggingFaceDatasetGraphV1
 )
@@ -23,6 +24,7 @@ from icecube.models import (
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
+    IceCubeModelEncoderSensorEmbeddinngV3,
     IceCubeModelEncoderMAT,
     IceCubeModelEncoderMATMasked
 )
@@ -133,4 +135,17 @@ class BASELINE_EMBED_V3(BASELINE_HF_V2):
     TRN_BATCH_RANGE = (1, 100)
     VAL_BATCH_RANGE = (622, 627)
     EPOCHS = 10
+
+class BASELINE_EMBED_V4(BASELINE_EMBED_V3):
+    EXP_NAME = "EXP_10"
+    MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV3
+
+class BASELINE_EMBED_V5(BASELINE_EMBED_V3):
+    EXP_NAME = "EXP_11"
+    TRN_DATASET = HuggingFaceDatasetV4
+    VAL_DATASET = HuggingFaceDatasetV4
+
+
+
+
 

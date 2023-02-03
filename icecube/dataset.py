@@ -2,9 +2,9 @@
 
 # %% auto 0
 __all__ = ['load_data', 'IceCubeCasheDatasetV0', 'IceCubeCasheDatasetV1', 'HuggingFaceDatasetV0', 'normalize',
-           'HuggingFaceDatasetV1', 'HuggingFaceDatasetV2', 'HuggingFaceDatasetV3', 'get_distance_matrix',
-           'get_distance_matrix_for_indices', 'get_distance_matrix_from_csv', 'HuggingFaceDatasetGraphV0',
-           'HuggingFaceDatasetGraphV1', 'good_luck']
+           'HuggingFaceDatasetV1', 'HuggingFaceDatasetV2', 'HuggingFaceDatasetV3', 'HuggingFaceDatasetV4',
+           'get_distance_matrix', 'get_distance_matrix_for_indices', 'get_distance_matrix_from_csv',
+           'HuggingFaceDatasetGraphV0', 'HuggingFaceDatasetGraphV1', 'good_luck']
 
 # %% ../nbs/00_dataset.ipynb 1
 from torch.utils.data import Dataset, DataLoader
@@ -308,6 +308,79 @@ class HuggingFaceDatasetV3(Dataset):
     """
 
     def __init__(self, ds, max_events=100):
+        self.ds = ds
+        self.max_events = max_events
+        self.geom_max = np.array([576.37, 509.5, 524.56])
+        self.geom_min = np.array([[-570.9, -521.08, -512.82]])
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        item = self.ds[idx]
+
+        event = pd.DataFrame(item)[
+            [
+                "sensor_id",
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+            ]
+        ].astype(np.float32)
+
+        # in this way the time start at 0 and end at 1
+        event["time"] = 1 - normalize(event["time"])
+        if self.max_events:
+            event = event[: self.max_events]
+
+        # normalize the x,y,z coordinates of geomatry
+        # TO DO add this in to preprocessing
+        event[["x", "y", "z"]] = (event[["x", "y", "z"]].values - self.geom_min) / (
+            self.geom_max - self.geom_min
+        )
+
+        # this is done in order to shift sensor id from 0 to 1
+        # since paddding index is 0
+        sensor_id = event["sensor_id"].values + 1
+
+        event["charge"] = np.log10(event["charge"])
+
+        event = event[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+            ]
+        ].values
+        mask = np.ones(len(event), dtype=bool)
+        label = np.array([item["azimuth"], item["zenith"]], dtype=np.float32)
+
+        batch = deepcopy(
+            {
+                "sensor_id": torch.tensor(sensor_id, dtype=torch.int32),
+                "event": torch.tensor(event, dtype=torch.float32),
+                "mask": torch.tensor(mask),
+                "label": torch.tensor(label),
+            }
+        )
+        return batch
+
+class HuggingFaceDatasetV4(Dataset):
+    """
+    Same as HuggingFaceDatasetV0 but returns sensor_id as well
+    in addition it adds + 1 to make the sensor_id start from 1 instead of 0,
+    0 is ignore index
+
+
+    """
+
+    def __init__(self, ds, max_events=160):
         self.ds = ds
         self.max_events = max_events
         self.geom_max = np.array([576.37, 509.5, 524.56])
