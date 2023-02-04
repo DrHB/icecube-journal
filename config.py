@@ -5,6 +5,7 @@ from icecube.dataset import (
     HuggingFaceDatasetV2,
     HuggingFaceDatasetV3,
     HuggingFaceDatasetV4,
+    HuggingFaceDatasetV5,
     HuggingFaceDatasetGraphV0,
     HuggingFaceDatasetGraphV1
 )
@@ -144,6 +145,18 @@ class BASELINE_EMBED_V5(BASELINE_EMBED_V3):
     EXP_NAME = "EXP_11"
     TRN_DATASET = HuggingFaceDatasetV4
     VAL_DATASET = HuggingFaceDatasetV4
+
+class BASELINE_HF_V3(BASELINE_HF_V1):
+    EXP_NAME = "EXP_12"
+    LOSS_FUNC = LogCoshLoss
+    TRN_DATASET = HuggingFaceDatasetV5
+    VAL_DATASET = HuggingFaceDatasetV5
+    TRN_BATCH_RANGE = (1, 100)
+    VAL_BATCH_RANGE = (622, 627)
+    EPOCHS = 10
+
+
+
 
 
 

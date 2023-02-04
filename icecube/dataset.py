@@ -3,8 +3,8 @@
 # %% auto 0
 __all__ = ['load_data', 'IceCubeCasheDatasetV0', 'IceCubeCasheDatasetV1', 'HuggingFaceDatasetV0', 'normalize',
            'HuggingFaceDatasetV1', 'HuggingFaceDatasetV2', 'HuggingFaceDatasetV3', 'HuggingFaceDatasetV4',
-           'get_distance_matrix', 'get_distance_matrix_for_indices', 'get_distance_matrix_from_csv',
-           'HuggingFaceDatasetGraphV0', 'HuggingFaceDatasetGraphV1', 'good_luck']
+           'event_filtering_v1', 'HuggingFaceDatasetV5', 'get_distance_matrix', 'get_distance_matrix_for_indices',
+           'get_distance_matrix_from_csv', 'HuggingFaceDatasetGraphV0', 'HuggingFaceDatasetGraphV1', 'good_luck']
 
 # %% ../nbs/00_dataset.ipynb 1
 from torch.utils.data import Dataset, DataLoader
@@ -445,7 +445,81 @@ class HuggingFaceDatasetV4(Dataset):
         return batch
 
 
-# %% ../nbs/00_dataset.ipynb 7
+def event_filtering_v1(batch, max_pulse_count=128, t_valid_length=6199.700247193777):
+    col = batch.columns
+    t_peak = batch["time"][batch["charge"].argmax()]
+    t_valid_min = t_peak - t_valid_length
+    t_valid_max = t_peak + t_valid_length
+    t_valid = (batch["time"] > t_valid_min) * (batch["time"] < t_valid_max)
+    batch["rank"] = 2 * (1 - batch["auxiliary"]) + (t_valid)
+    batch = batch.sort_values(by=["rank", "charge"])
+    # pick-up from backward
+    batch = batch[-max_pulse_count:]
+        # resort by time
+    batch = batch.sort_values(by="time")
+    return batch[col]
+        
+
+class HuggingFaceDatasetV5(Dataset):
+    """
+    dataset with event filtering up to 128
+
+
+    """
+
+    def __init__(self, ds, max_events=128):
+        self.ds = ds
+        self.max_events = max_events
+        self.geom_max = np.array([576.37, 509.5, 524.56])
+        self.geom_min = np.array([[-570.9, -521.08, -512.82]])
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        item = self.ds[idx]
+
+        event = pd.DataFrame(item)[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+            ]
+        ].astype(np.float32)
+        event["time"] /= event["time"].max()
+        
+        if event.shape[0] > self.max_events:
+            event = event_filtering_v1(event, max_pulse_count=self.max_events)
+
+        event[["x", "y", "z"]] /= 500
+        event["charge"] = np.log10(event["charge"])
+        event = event[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+            ]
+        ].values
+        mask = np.ones(len(event), dtype=bool)
+        label = np.array([item["azimuth"], item["zenith"]], dtype=np.float32)
+
+        batch = deepcopy(
+            {
+                "event": torch.tensor(event, dtype=torch.float32),
+                "mask": torch.tensor(mask),
+                "label": torch.tensor(label),
+            }
+        )
+        return batch
+
+
+# %% ../nbs/00_dataset.ipynb 9
 # pytorch function that takes [n, x, y, z] tensor and calculates the distance between each point and returns [n x n] matrix using torch.cdist
 def get_distance_matrix(xyz):
     return torch.cdist(xyz, xyz)
@@ -613,6 +687,6 @@ class HuggingFaceDatasetGraphV1(Dataset):
 
 
 
-# %% ../nbs/00_dataset.ipynb 10
+# %% ../nbs/00_dataset.ipynb 12
 def good_luck():
     return True

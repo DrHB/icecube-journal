@@ -90,6 +90,7 @@ class IceCubeModelEncoderV0(nn.Module):
         self.head = FeedForward(128, 2)
 
     def forward(self, x, mask):
+        
         x = self.encoder(x, mask=mask)
         x = x.mean(dim=1)
         x = self.head(x)
@@ -109,7 +110,8 @@ class IceCubeModelEncoderV1(nn.Module):
         self.pool = MeanPoolingWithMask()
         self.head = FeedForward(128, 2)
 
-    def forward(self, x, mask):
+    def forward(self, batch):
+        x, mask = batch['event'], batch['mask']
         x = self.encoder(x, mask=mask)
         x = self.pool(x, mask)
         x = self.head(x)
