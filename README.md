@@ -16,8 +16,9 @@
 |EXP_08 |`~ 1.275`| same as `EXP_06` but `pooling` is done now on `mask` using `MeanPoolingWithMask` , `x`, `y` and `z` are normalized by dividing by `500`,  `time` is normalized  `(event['time'] - 1.0e04) / 3.0e4` and `charge` `np.log10(event["charge"])/3.0`  and  `adjacent matrix` is calculated by taking `sensor_id` which are `0.05` away from each other |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name MATGRAPHV3`|`(1, 100)` |
 |EXP_09 |`1.177`| same as `EXP_05`  but with `(1, 100)`  just to have benchmark for small data training  |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V3`|`(1, 100)` |
 |EXP_10 |`NG`| same as `EXP_09`  but with `SigmoidRange`  |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V4`|`(1, 100)` |
-|EXP_11 |`SAME`| same as `EXP_09` but extended `max_events` to `160` from `100` |`(1, 100)` |
-|EXP_12 || same as `EXP_02` , but event are restricted to `128`, they are selected based on `pulse` and `light_speed`, pooling is performed using `mask` |`(1, 100)` |
+|EXP_11 |`SAME`| same as `EXP_09` but extended `max_events` to `160` from `100` |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V5` |`(1, 100)` |
+|EXP_12 |`1.170`| same as `EXP_02` , but event are restricted to `128`, they are selected based on `pulse` and `light_speed`, pooling is performed using `mask` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V3` |`(1, 100)` |
+|EXP_13 || This experiment I am using again transformer `encoder` with `6` layers, pooling on `mask`, normalization is performed in following way. For `xyz` we divide by `500` for charge its `log10` and for time its  ` (event["time"].values - 1.0e04) / 3.0e4`, added additional features; `qe` outer layer of the icecube and added `ice_scattering`. The dataset is filtered using `light speed` travel distance if it exceed more then `128` rows. for the loss i am using `VonMisesFisher3DLoss`, which operates on `vector` space| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V4` |`(1, 100)` |
 
 
 ```python

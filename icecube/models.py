@@ -4,9 +4,11 @@
 __all__ = ['DIST_KERNELS', 'LogCoshLoss', 'SigmoidRange', 'Adjustoutput', 'MeanPoolingWithMask', 'FeedForward',
            'IceCubeModelEncoderV0', 'IceCubeModelEncoderV1', 'always', 'l2norm', 'TokenEmbedding',
            'IceCubeModelEncoderSensorEmbeddinng', 'IceCubeModelEncoderSensorEmbeddinngV1', 'TokenEmbeddingV2',
-           'IceCubeModelEncoderSensorEmbeddinngV2', 'IceCubeModelEncoderSensorEmbeddinngV3', 'exists', 'default',
-           'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT',
-           'IceCubeModelEncoderMATMasked']
+           'IceCubeModelEncoderSensorEmbeddinngV2', 'IceCubeModelEncoderSensorEmbeddinngV3', 'LogCMK', 'LossFunction',
+           'VonMisesFisherLoss', 'VonMisesFisher2DLoss', 'VonMisesFisher3DLoss', 'eps_like',
+           'AzimuthReconstructionWithKappa', 'DirectionReconstructionWithKappa', 'ZenithReconstruction',
+           'IceCubeModelEncoderV2', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT',
+           'MATMaskedPool', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked']
 
 # %% ../nbs/01_models.ipynb 1
 import torch
@@ -14,7 +16,12 @@ from x_transformers import ContinuousTransformerWrapper, Encoder, Decoder
 from torch import nn, einsum
 from einops import rearrange
 import torch.nn.functional as F
-
+from datasets import load_from_disk
+from abc import abstractmethod
+from torch import Tensor
+from typing import Optional, Any
+import scipy
+import numpy as np
 
 
 # %% ../nbs/01_models.ipynb 2
@@ -89,8 +96,8 @@ class IceCubeModelEncoderV0(nn.Module):
         # self.pool = MeanPoolingWithMask()
         self.head = FeedForward(128, 2)
 
-    def forward(self, x, mask):
-        
+    def forward(self, batch):
+        x, mask = batch['event'], batch['mask']
         x = self.encoder(x, mask=mask)
         x = x.mean(dim=1)
         x = self.head(x)
@@ -266,6 +273,307 @@ class IceCubeModelEncoderSensorEmbeddinngV3(nn.Module):
 
 
 # %% ../nbs/01_models.ipynb 4
+class LogCMK(torch.autograd.Function):
+    """MIT License.
+    Copyright (c) 2019 Max Ryabinin
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+    _____________________
+    From [https://github.com/mryab/vmf_loss/blob/master/losses.py]
+    Modified to use modified Bessel function instead of exponentially scaled ditto
+    (i.e. `.ive` -> `.iv`) as indiciated in [1812.04616] in spite of suggestion in
+    Sec. 8.2 of this paper. The change has been validated through comparison with
+    exact calculations for `m=2` and `m=3` and found to yield the correct results.
+    """
+
+    @staticmethod
+    def forward(
+        ctx: Any, m: int, kappa: Tensor
+    ) -> Tensor:  # pylint: disable=invalid-name,arguments-differ
+        """Forward pass."""
+        dtype = kappa.dtype
+        ctx.save_for_backward(kappa)
+        ctx.m = m
+        ctx.dtype = dtype
+        kappa = kappa.double()
+        iv = torch.from_numpy(
+            scipy.special.iv(m / 2.0 - 1, kappa.cpu().numpy())
+        ).to(kappa.device)
+        return (
+            (m / 2.0 - 1) * torch.log(kappa)
+            - torch.log(iv)
+            - (m / 2) * np.log(2 * np.pi)
+        ).type(dtype)
+
+    @staticmethod
+    def backward(
+        ctx: Any, grad_output: Tensor
+    ) -> Tensor:  # pylint: disable=invalid-name,arguments-differ
+        """Backward pass."""
+        kappa = ctx.saved_tensors[0]
+        m = ctx.m
+        dtype = ctx.dtype
+        kappa = kappa.double().cpu().numpy()
+        grads = -(
+            (scipy.special.iv(m / 2.0, kappa))
+            / (scipy.special.iv(m / 2.0 - 1, kappa))
+        )
+        return (
+            None,
+            grad_output
+            * torch.from_numpy(grads).to(grad_output.device).type(dtype),
+        )
+
+
+
+class LossFunction(nn.Module):
+    """Base class for loss functions in `graphnet`."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(  # type: ignore[override]
+        self,
+        prediction: Tensor,
+        target: Tensor,
+        weights: Optional[Tensor] = None,
+        return_elements: bool = False,
+    ) -> Tensor:
+        """Forward pass for all loss functions.
+        Args:
+            prediction: Tensor containing predictions. Shape [N,P]
+            target: Tensor containing targets. Shape [N,T]
+            return_elements: Whether elementwise loss terms should be returned.
+                The alternative is to return the averaged loss across examples.
+        Returns:
+            Loss, either averaged to a scalar (if `return_elements = False`) or
+            elementwise terms with shape [N,] (if `return_elements = True`).
+        """
+        elements = self._forward(prediction, target)
+        if weights is not None:
+            elements = elements * weights
+        assert elements.size(dim=0) == target.size(
+            dim=0
+        ), "`_forward` should return elementwise loss terms."
+
+        return elements if return_elements else torch.mean(elements)
+
+    @abstractmethod
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Syntax like `.forward`, for implentation in inheriting classes."""
+
+class VonMisesFisherLoss(LossFunction):
+    """General class for calculating von Mises-Fisher loss.
+    Requires implementation for specific dimension `m` in which the target and
+    prediction vectors need to be prepared.
+    """
+
+    @classmethod
+    def log_cmk_exact(
+        cls, m: int, kappa: Tensor
+    ) -> Tensor:  # pylint: disable=invalid-name
+        """Calculate $log C_{m}(k)$ term in von Mises-Fisher loss exactly."""
+        return LogCMK.apply(m, kappa)
+
+    @classmethod
+    def log_cmk_approx(
+        cls, m: int, kappa: Tensor
+    ) -> Tensor:  # pylint: disable=invalid-name
+        """Calculate $log C_{m}(k)$ term in von Mises-Fisher loss approx.
+        [https://arxiv.org/abs/1812.04616] Sec. 8.2 with additional minus sign.
+        """
+        v = m / 2.0 - 0.5
+        a = torch.sqrt((v + 1) ** 2 + kappa**2)
+        b = v - 1
+        return -a + b * torch.log(b + a)
+
+    @classmethod
+    def log_cmk(
+        cls, m: int, kappa: Tensor, kappa_switch: float = 100.0
+    ) -> Tensor:  # pylint: disable=invalid-name
+        """Calculate $log C_{m}(k)$ term in von Mises-Fisher loss.
+        Since `log_cmk_exact` is diverges for `kappa` >~ 700 (using float64
+        precision), and since `log_cmk_approx` is unaccurate for small `kappa`,
+        this method automatically switches between the two at `kappa_switch`,
+        ensuring continuity at this point.
+        """
+        kappa_switch = torch.tensor([kappa_switch]).to(kappa.device)
+        mask_exact = kappa < kappa_switch
+
+        # Ensure continuity at `kappa_switch`
+        offset = cls.log_cmk_approx(m, kappa_switch) - cls.log_cmk_exact(
+            m, kappa_switch
+        )
+        ret = cls.log_cmk_approx(m, kappa) - offset
+        ret[mask_exact] = cls.log_cmk_exact(m, kappa[mask_exact])
+        return ret
+
+    def _evaluate(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Calculate von Mises-Fisher loss for a vector in D dimensons.
+        This loss utilises the von Mises-Fisher distribution, which is a
+        probability distribution on the (D - 1) sphere in D-dimensional space.
+        Args:
+            prediction: Predicted vector, of shape [batch_size, D].
+            target: Target unit vector, of shape [batch_size, D].
+        Returns:
+            Elementwise von Mises-Fisher loss terms.
+        """
+        # Check(s)
+        assert prediction.dim() == 2
+        assert target.dim() == 2
+        assert prediction.size() == target.size()
+
+        # Computing loss
+        m = target.size()[1]
+        k = torch.norm(prediction, dim=1)
+        dotprod = torch.sum(prediction * target, dim=1)
+        elements = -self.log_cmk(m, k) - dotprod
+        return elements
+
+    @abstractmethod
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        raise NotImplementedError
+
+class VonMisesFisher2DLoss(VonMisesFisherLoss):
+    """von Mises-Fisher loss function vectors in the 2D plane."""
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Calculate von Mises-Fisher loss for an angle in the 2D plane.
+        Args:
+            prediction: Output of the model. Must have shape [N, 2] where 0th
+                column is a prediction of `angle` and 1st column is an estimate
+                of `kappa`.
+            target: Target tensor, extracted from graph object.
+        Returns:
+            loss: Elementwise von Mises-Fisher loss terms. Shape [N,]
+        """
+        # Check(s)
+        assert prediction.dim() == 2 and prediction.size()[1] == 2
+        assert target.dim() == 2
+        assert prediction.size()[0] == target.size()[0]
+
+        # Formatting target
+        angle_true = target[:, 0]
+        t = torch.stack(
+            [
+                torch.cos(angle_true),
+                torch.sin(angle_true),
+            ],
+            dim=1,
+        )
+
+        # Formatting prediction
+        angle_pred = prediction[:, 0]
+        kappa = prediction[:, 1]
+        p = kappa.unsqueeze(1) * torch.stack(
+            [
+                torch.cos(angle_pred),
+                torch.sin(angle_pred),
+            ],
+            dim=1,
+        )
+
+        return self._evaluate(p, t)
+
+class VonMisesFisher3DLoss(VonMisesFisherLoss):
+    """von Mises-Fisher loss function vectors in the 3D plane."""
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """Calculate von Mises-Fisher loss for a direction in the 3D.
+        Args:
+            prediction: Output of the model. Must have shape [N, 4] where
+                columns 0, 1, 2 are predictions of `direction` and last column
+                is an estimate of `kappa`.
+            target: Target tensor, extracted from graph object.
+        Returns:
+            Elementwise von Mises-Fisher loss terms. Shape [N,]
+        """
+        target = target.reshape(-1, 3)
+        # Check(s)
+        assert prediction.dim() == 2 and prediction.size()[1] == 4
+        assert target.dim() == 2
+        assert prediction.size()[0] == target.size()[0]
+
+        kappa = prediction[:, 3]
+        p = kappa.unsqueeze(1) * prediction[:, [0, 1, 2]]
+        return self._evaluate(p, target)
+
+def eps_like(tensor: torch.Tensor) -> torch.Tensor:
+    """Return `eps` matching `tensor`'s dtype."""
+    return torch.finfo(tensor.dtype).eps
+
+class AzimuthReconstructionWithKappa(nn.Module):
+    """Module for predicting azimuth angle and kappa."""
+    def __init__(self, in_features: int):
+        super().__init__()
+        self.linear = nn.Linear(in_features, 2)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.linear(x)
+        kappa = torch.linalg.vector_norm(x, dim=1) + eps_like(x)
+        angle = torch.atan2(x[:, 1], x[:, 0])
+        angle = torch.where(
+            angle < 0, angle + 2 * np.pi, angle
+        )  
+        return torch.stack((angle, kappa), dim=1)
+        
+class DirectionReconstructionWithKappa(nn.Module):
+    """Module for predicting direction and kappa."""
+    def __init__(self, in_features: int):
+        super().__init__()
+        self.linear = nn.Linear(in_features, 3)
+
+    def forward(self, x: Tensor) -> Tensor:
+        # Transform outputs to angle and prepare prediction
+        x = self.linear(x)
+        kappa = torch.linalg.vector_norm(x, dim=1) + eps_like(x)
+        vec_x = x[:, 0] / kappa
+        vec_y = x[:, 1] / kappa
+        vec_z = x[:, 2] / kappa
+        return torch.stack((vec_x, vec_y, vec_z, kappa), dim=1)
+
+class ZenithReconstruction(nn.Module):
+    def __init__(self, in_features: int):
+        super().__init__()
+        self.linear = nn.Linear(in_features, 1)
+
+    def forward(self, x: Tensor):
+        x = self.linear(x)
+        return torch.sigmoid(x[:, :1]) * np.pi
+
+
+class IceCubeModelEncoderV2(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_in=8,
+            dim_out=128,
+            max_seq_len=150,
+            attn_layers=Encoder(dim=128, depth=6, heads=8),
+        )
+
+        self.pool = MeanPoolingWithMask()
+        self.out = DirectionReconstructionWithKappa(128)
+
+    def forward(self, batch):
+        x, mask = batch['event'], batch['mask']
+        x = self.encoder(x, mask=mask)
+        x = self.pool(x, mask)
+        return self.out(x)
+
+# %% ../nbs/01_models.ipynb 7
 # MOLECULAR TRANFORMER
 DIST_KERNELS = {
     "exp": {

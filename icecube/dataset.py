@@ -3,7 +3,8 @@
 # %% auto 0
 __all__ = ['load_data', 'IceCubeCasheDatasetV0', 'IceCubeCasheDatasetV1', 'HuggingFaceDatasetV0', 'normalize',
            'HuggingFaceDatasetV1', 'HuggingFaceDatasetV2', 'HuggingFaceDatasetV3', 'HuggingFaceDatasetV4',
-           'event_filtering_v1', 'HuggingFaceDatasetV5', 'get_distance_matrix', 'get_distance_matrix_for_indices',
+           'event_filtering_v1', 'HuggingFaceDatasetV5', 'ice_transparency', 'prepare_sensors', 'convert_to_3d',
+           'HuggingFaceDatasetV6', 'get_distance_matrix', 'get_distance_matrix_for_indices',
            'get_distance_matrix_from_csv', 'HuggingFaceDatasetGraphV0', 'HuggingFaceDatasetGraphV1', 'good_luck']
 
 # %% ../nbs/00_dataset.ipynb 1
@@ -14,6 +15,8 @@ import pandas as pd
 import numpy as np
 from copy import deepcopy
 from datasets import  load_from_disk
+from scipy.interpolate import interp1d
+from sklearn.preprocessing import RobustScaler
 
 # %% ../nbs/00_dataset.ipynb 4
 # function that loads the data from the pth file and return the data and the label as pd.DataFrame
@@ -508,6 +511,134 @@ class HuggingFaceDatasetV5(Dataset):
         ].values
         mask = np.ones(len(event), dtype=bool)
         label = np.array([item["azimuth"], item["zenith"]], dtype=np.float32)
+
+        batch = deepcopy(
+            {
+                "event": torch.tensor(event, dtype=torch.float32),
+                "mask": torch.tensor(mask),
+                "label": torch.tensor(label),
+            }
+        )
+        return batch
+
+
+# %% ../nbs/00_dataset.ipynb 7
+def ice_transparency(
+    data_path="/opt/slh/icecube/data/ice_transparency.txt", datum=1950
+):
+    # Data from page 31 of https://arxiv.org/pdf/1301.5361.pdf
+    # Datum is from footnote 8 of page 29
+    df = pd.read_csv(data_path, delim_whitespace=True)
+    df["z"] = df["depth"] - datum
+    df["z_norm"] = df["z"] / 500
+    df[["scattering_len_norm", "absorption_len_norm"]] = RobustScaler().fit_transform(
+        df[["scattering_len", "absorption_len"]]
+    )
+
+    # These are both roughly equivalent after scaling
+    f_scattering = interp1d(df["z_norm"], df["scattering_len_norm"])
+    f_absorption = interp1d(df["z_norm"], df["absorption_len_norm"])
+    return f_scattering, f_absorption
+
+def prepare_sensors():
+    sensors = pd.read_csv('/opt/slh/icecube/data/sensor_geometry.csv').astype(
+        {
+            "sensor_id": np.int16,
+            "x": np.float32,
+            "y": np.float32,
+            "z": np.float32,
+        }
+    )
+    sensors["string"] = 0
+    sensors["qe"] = 1
+
+    for i in range(len(sensors) // 60):
+        start, end = i * 60, (i * 60) + 60
+        sensors.loc[start:end, "string"] = i
+
+        # High Quantum Efficiency in the lower 50 DOMs - https://arxiv.org/pdf/2209.03042.pdf (Figure 1)
+        if i in range(78, 86):
+            start_veto, end_veto = i * 60, (i * 60) + 10
+            start_core, end_core = end_veto + 1, (i * 60) + 60
+            sensors.loc[start_core:end_core, "qe"] = 1.35
+
+    # https://github.com/graphnet-team/graphnet/blob/b2bad25528652587ab0cdb7cf2335ee254cfa2db/src/graphnet/models/detector/icecube.py#L33-L41
+    # Assume that "rde" (relative dom efficiency) is equivalent to QE
+    sensors["x"] /= 500
+    sensors["y"] /= 500
+    sensors["z"] /= 500
+    sensors["qe"] -= 1.25
+    sensors["qe"] /= 0.25
+
+    return sensors.set_index("sensor_id")[['qe']]
+
+
+def convert_to_3d(azimuth, zenith):
+    """Converts zenith and azimuth to 3D direction vectors"""
+    x = np.cos(azimuth) * np.sin(zenith)
+    y = np.sin(azimuth) * np.sin(zenith)
+    z = np.cos(zenith)
+    return np.array([x, y, z], dtype=np.float32)
+
+
+class HuggingFaceDatasetV6(Dataset):
+    """
+    dataset with event filtering up to 128
+
+
+    """
+
+    def __init__(self, ds, max_events=128):
+        self.ds = ds
+        self.max_events = max_events
+        self.f_scattering, self.f_absorption = ice_transparency()
+        self.sensor_data = prepare_sensors()
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        item = self.ds[idx]
+
+        event = pd.DataFrame(item)[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+                "sensor_id"
+            ]
+        ].astype(np.float32)
+        t = (event["time"].values - 1.0e04) / 3.0e4
+        event["time"] /= event["time"].max()
+
+        if event.shape[0] > self.max_events:
+            event = event_filtering_v1(event, max_pulse_count=self.max_events)
+
+        event[["x", "y", "z"]] /= 500
+        event["charge"] = np.log10(event["charge"]) / 3.0
+        event["auxiliary"] -= 0.5
+
+        event["time"] = t[: self.max_events]
+        event["scattering"] = self.f_scattering(event["z"].values).reshape(-1)
+        event['qe'] = self.sensor_data.loc[event['sensor_id'].values].values.reshape(-1)
+        event = event[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+                "qe",
+                "scattering",
+            ]
+        ].values
+        mask = np.ones(len(event), dtype=bool)
+        label = convert_to_3d(item["azimuth"], item["zenith"])
+        #print(item["azimuth"], item["zenith"])
 
         batch = deepcopy(
             {

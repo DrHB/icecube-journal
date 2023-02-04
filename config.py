@@ -6,8 +6,9 @@ from icecube.dataset import (
     HuggingFaceDatasetV3,
     HuggingFaceDatasetV4,
     HuggingFaceDatasetV5,
+    HuggingFaceDatasetV6,
     HuggingFaceDatasetGraphV0,
-    HuggingFaceDatasetGraphV1
+    HuggingFaceDatasetGraphV1,
 )
 
 from pathlib import Path
@@ -19,17 +20,19 @@ from transformers.optimization import (
 )
 
 from icecube.models import (
-    IceCubeModelEncoderV1,
     LogCoshLoss,
+    VonMisesFisher3DLoss,
     IceCubeModelEncoderV0,
+    IceCubeModelEncoderV1,
+    IceCubeModelEncoderV2,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
     IceCubeModelEncoderSensorEmbeddinngV3,
     IceCubeModelEncoderMAT,
-    IceCubeModelEncoderMATMasked
+    IceCubeModelEncoderMATMasked,
 )
-from icecube.utils import fit_shuflle, get_score
+from icecube.utils import fit_shuflle, get_score, get_score_vector
 from torch import nn
 
 
@@ -101,7 +104,6 @@ class BASELINE_EMBED_V2(BASELINE_HF_V2):
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV2
 
 
-
 class MATGRAPH(BASELINE_HF_V2):
     EXP_NAME = "EXP_06"
     LOSS_FUNC = LogCoshLoss
@@ -118,6 +120,7 @@ class MATGRAPH(BASELINE_HF_V2):
 class MATGRAPHV2(MATGRAPH):
     EXP_NAME = "EXP_07"
     MODEL_NAME = IceCubeModelEncoderMATMasked
+
 
 class MATGRAPHV3(MATGRAPHV2):
     EXP_NAME = "EXP_08"
@@ -137,14 +140,17 @@ class BASELINE_EMBED_V3(BASELINE_HF_V2):
     VAL_BATCH_RANGE = (622, 627)
     EPOCHS = 10
 
+
 class BASELINE_EMBED_V4(BASELINE_EMBED_V3):
     EXP_NAME = "EXP_10"
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV3
+
 
 class BASELINE_EMBED_V5(BASELINE_EMBED_V3):
     EXP_NAME = "EXP_11"
     TRN_DATASET = HuggingFaceDatasetV4
     VAL_DATASET = HuggingFaceDatasetV4
+
 
 class BASELINE_HF_V3(BASELINE_HF_V1):
     EXP_NAME = "EXP_12"
@@ -156,9 +162,13 @@ class BASELINE_HF_V3(BASELINE_HF_V1):
     EPOCHS = 10
 
 
-
-
-
-
-
-
+class BASELINE_HF_V4(BASELINE_HF_V1):
+    EXP_NAME = "EXP_13"
+    LOSS_FUNC = VonMisesFisher3DLoss
+    TRN_DATASET = HuggingFaceDatasetV6
+    VAL_DATASET = HuggingFaceDatasetV6
+    MODEL_NAME = IceCubeModelEncoderV2
+    TRN_BATCH_RANGE = (1, 100)
+    VAL_BATCH_RANGE = (622, 627)
+    EPOCHS = 10
+    METRIC = get_score_vector
