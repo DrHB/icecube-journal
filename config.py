@@ -12,6 +12,7 @@ from icecube.dataset import (
     HuggingFaceDatasetGraphV1,
 )
 
+#from icecube.modelsgraph import EncoderWithReconstructionLossV0, CombineLossV0
 from pathlib import Path
 from icecube.utils import collate_fn, collate_fn_v1, collate_fn_graphv0
 import torch
@@ -26,6 +27,7 @@ from icecube.models import (
     IceCubeModelEncoderV0,
     IceCubeModelEncoderV1,
     IceCubeModelEncoderV2,
+    IceCubeModelEncoderV1CombinePool,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
@@ -33,7 +35,7 @@ from icecube.models import (
     IceCubeModelEncoderMAT,
     IceCubeModelEncoderMATMasked,
 )
-from icecube.utils import fit_shuflle, get_score, get_score_vector, fit_shuflle_fp32
+from icecube.utils import fit_shuflle, get_score, get_score_vector, fit_shuflle_fp32, get_score_v1
 from torch import nn
 
 
@@ -167,3 +169,10 @@ class BASELINE_HF_V4(BASELINE_HF_V3):
     EXP_NAME = "EXP_13"
     TRN_DATASET = HuggingFaceDatasetV7
     VAL_DATASET = HuggingFaceDatasetV7
+    
+class BASELINE_HF_V5(BASELINE_HF_V4):
+    EXP_NAME = "EXP_14"
+    MODEL_NAME = IceCubeModelEncoderV1CombinePool
+    
+
+    
