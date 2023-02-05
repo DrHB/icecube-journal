@@ -7,6 +7,7 @@ from icecube.dataset import (
     HuggingFaceDatasetV4,
     HuggingFaceDatasetV5,
     HuggingFaceDatasetV6,
+    HuggingFaceDatasetV7,
     HuggingFaceDatasetGraphV0,
     HuggingFaceDatasetGraphV1,
 )
@@ -32,7 +33,7 @@ from icecube.models import (
     IceCubeModelEncoderMAT,
     IceCubeModelEncoderMATMasked,
 )
-from icecube.utils import fit_shuflle, get_score, get_score_vector
+from icecube.utils import fit_shuflle, get_score, get_score_vector, fit_shuflle_fp32
 from torch import nn
 
 
@@ -162,13 +163,7 @@ class BASELINE_HF_V3(BASELINE_HF_V1):
     EPOCHS = 10
 
 
-class BASELINE_HF_V4(BASELINE_HF_V1):
+class BASELINE_HF_V4(BASELINE_HF_V3):
     EXP_NAME = "EXP_13"
-    LOSS_FUNC = VonMisesFisher3DLoss
-    TRN_DATASET = HuggingFaceDatasetV6
-    VAL_DATASET = HuggingFaceDatasetV6
-    MODEL_NAME = IceCubeModelEncoderV2
-    TRN_BATCH_RANGE = (1, 100)
-    VAL_BATCH_RANGE = (622, 627)
-    EPOCHS = 10
-    METRIC = get_score_vector
+    TRN_DATASET = HuggingFaceDatasetV7
+    VAL_DATASET = HuggingFaceDatasetV7

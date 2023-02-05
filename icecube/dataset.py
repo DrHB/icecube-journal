@@ -4,7 +4,7 @@
 __all__ = ['load_data', 'IceCubeCasheDatasetV0', 'IceCubeCasheDatasetV1', 'HuggingFaceDatasetV0', 'normalize',
            'HuggingFaceDatasetV1', 'HuggingFaceDatasetV2', 'HuggingFaceDatasetV3', 'HuggingFaceDatasetV4',
            'event_filtering_v1', 'HuggingFaceDatasetV5', 'ice_transparency', 'prepare_sensors', 'convert_to_3d',
-           'HuggingFaceDatasetV6', 'get_distance_matrix', 'get_distance_matrix_for_indices',
+           'HuggingFaceDatasetV6', 'HuggingFaceDatasetV7', 'get_distance_matrix', 'get_distance_matrix_for_indices',
            'get_distance_matrix_from_csv', 'HuggingFaceDatasetGraphV0', 'HuggingFaceDatasetGraphV1', 'good_luck']
 
 # %% ../nbs/00_dataset.ipynb 1
@@ -638,6 +638,75 @@ class HuggingFaceDatasetV6(Dataset):
         ].values
         mask = np.ones(len(event), dtype=bool)
         label = convert_to_3d(item["azimuth"], item["zenith"])
+        #print(item["azimuth"], item["zenith"])
+
+        batch = deepcopy(
+            {
+                "event": torch.tensor(event, dtype=torch.float32),
+                "mask": torch.tensor(mask),
+                "label": torch.tensor(label),
+            }
+        )
+        return batch
+
+
+class HuggingFaceDatasetV7(Dataset):
+    """
+    dataset with event filtering up to 128
+
+
+    """
+
+    def __init__(self, ds, max_events=128):
+        self.ds = ds
+        self.max_events = max_events
+        self.f_scattering, self.f_absorption = ice_transparency()
+        self.sensor_data = prepare_sensors()
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        item = self.ds[idx]
+
+        event = pd.DataFrame(item)[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+                "sensor_id"
+            ]
+        ].astype(np.float32)
+        t = (event["time"].values - 1.0e04) / 3.0e4
+        event["time"] /= event["time"].max()
+
+        if event.shape[0] > self.max_events:
+            event = event_filtering_v1(event, max_pulse_count=self.max_events)
+
+        event[["x", "y", "z"]] /= 500
+        event["charge"] = np.log10(event["charge"]) / 3.0
+        event["auxiliary"] -= 0.5
+
+        event["time"] = t[: self.max_events]
+        event["scattering"] = self.f_scattering(event["z"].values).reshape(-1)
+        event['qe'] = self.sensor_data.loc[event['sensor_id'].values].values.reshape(-1)
+        event = event[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+                "qe",
+                "scattering",
+            ]
+        ].values
+        mask = np.ones(len(event), dtype=bool)
+        label = np.array([item["azimuth"], item["zenith"]], dtype=np.float32)
         #print(item["azimuth"], item["zenith"])
 
         batch = deepcopy(

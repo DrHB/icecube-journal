@@ -18,7 +18,7 @@
 |EXP_10 |`NG`| same as `EXP_09`  but with `SigmoidRange`  |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V4`|`(1, 100)` |
 |EXP_11 |`SAME`| same as `EXP_09` but extended `max_events` to `160` from `100` |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V5` |`(1, 100)` |
 |EXP_12 |`1.170`| same as `EXP_02` , but event are restricted to `128`, they are selected based on `pulse` and `light_speed`, pooling is performed using `mask` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V3` |`(1, 100)` |
-|EXP_13 || This experiment I am using again transformer `encoder` with `6` layers, pooling on `mask`, normalization is performed in following way. For `xyz` we divide by `500` for charge its `log10` and for time its  ` (event["time"].values - 1.0e04) / 3.0e4`, added additional features; `qe` outer layer of the icecube and added `ice_scattering`. The dataset is filtered using `light speed` travel distance if it exceed more then `128` rows. for the loss i am using `VonMisesFisher3DLoss`, which operates on `vector` space| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V4` |`(1, 100)` |
+|EXP_13 || This experiment I am using again transformer `encoder` with `6` layers, pooling on `mask`, normalization is performed in following way. For `xyz` we divide by `500` for charge its `log10` and for time its  ` (event["time"].values - 1.0e04) / 3.0e4`, added additional features; `qe` outer layer of the icecube and added `ice_scattering`. The dataset is filtered using `light speed` travel distance if it exceed more then `128` rows| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V4` |`(1, 100)` |
 
 
 ```python

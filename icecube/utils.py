@@ -2,9 +2,9 @@
 
 # %% auto 0
 __all__ = ['label_to_df', 'get_size', 'reduce_mem_usage', 'get_config_as_dict', 'save_folder', 'save_pred_as_csv', 'SaveModel',
-           'SaveModelMetric', 'SaveModelEpoch', 'fit', 'fit_shuflle', 'compare_events', 'get_batch_paths',
-           'angular_dist_score', 'get_score', 'get_score_vector', 'collate_fn', 'collate_fn_v1', 'collate_fn_graphv0',
-           'good_luck']
+           'SaveModelMetric', 'SaveModelEpoch', 'fit', 'fit_shuflle', 'fit_shuflle_fp32', 'compare_events',
+           'get_batch_paths', 'angular_dist_score', 'get_score', 'get_score_v1', 'get_score_vector', 'collate_fn',
+           'collate_fn_v1', 'collate_fn_graphv0', 'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -25,17 +25,27 @@ from datasets import load_dataset, load_from_disk, concatenate_datasets
 import random
 import wandb
 
+
 # %% ../nbs/00_utils.ipynb 2
-def label_to_df(label, angle_post_fix = '', vec_post_fix = ''):
-    df = pd.DataFrame(label, columns=['direction_x', 'direction_y', 'direction_z'])
-    r = np.sqrt(df['direction_x'+ vec_post_fix]**2 + df['direction_y'+ vec_post_fix]**2 + df['direction_z' + vec_post_fix]**2)
-    df['zenith' + angle_post_fix] = np.arccos(df['direction_z'+ vec_post_fix]/r)
-    df['azimuth'+ angle_post_fix] = np.arctan2(df['direction_y'+ vec_post_fix],df['direction_x' + vec_post_fix]) #np.sign(results['true_y'])*np.arccos((results['true_x'])/(np.sqrt(results['true_x']**2 + results['true_y']**2)))
-    df['azimuth'+ angle_post_fix][df['azimuth'  + angle_post_fix]<0] = df['azimuth'  + angle_post_fix][df['azimuth'  +  angle_post_fix]<0] + 2*np.pi 
+def label_to_df(label, angle_post_fix="", vec_post_fix=""):
+    df = pd.DataFrame(label, columns=["direction_x", "direction_y", "direction_z"])
+    r = np.sqrt(
+        df["direction_x" + vec_post_fix] ** 2
+        + df["direction_y" + vec_post_fix] ** 2
+        + df["direction_z" + vec_post_fix] ** 2
+    )
+    df["zenith" + angle_post_fix] = np.arccos(df["direction_z" + vec_post_fix] / r)
+    df["azimuth" + angle_post_fix] = np.arctan2(
+        df["direction_y" + vec_post_fix], df["direction_x" + vec_post_fix]
+    )  # np.sign(results['true_y'])*np.arccos((results['true_x'])/(np.sqrt(results['true_x']**2 + results['true_y']**2)))
+    df["azimuth" + angle_post_fix][df["azimuth" + angle_post_fix] < 0] = (
+        df["azimuth" + angle_post_fix][df["azimuth" + angle_post_fix] < 0] + 2 * np.pi
+    )
     return df
 
+
 def get_size(df):
-    return round(df.memory_usage(deep=True).sum() / 1024 ** 3, 2)
+    return round(df.memory_usage(deep=True).sum() / 1024**3, 2)
 
 
 def reduce_mem_usage(df):
@@ -50,23 +60,21 @@ def reduce_mem_usage(df):
             if str(col_type)[:3] == "int":
                 if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
                     df[col] = df[col].astype(np.int8)
-                elif (
-                    c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max
-                ):
+                elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
                     df[col] = df[col].astype(np.int16)
-                elif (
-                    c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max
-                ):
+                elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
                     df[col] = df[col].astype(np.int32)
-                elif (
-                    c_min > np.iinfo(np.int64).min and c_max < np.iinfo(np.int64).max
-                ):
+                elif c_min > np.iinfo(np.int64).min and c_max < np.iinfo(np.int64).max:
                     df[col] = df[col].astype(np.int64)
             else:
-                if c_min > np.finfo(np.float16).min and c_max < np.finfo(np.float16).max:
+                if (
+                    c_min > np.finfo(np.float16).min
+                    and c_max < np.finfo(np.float16).max
+                ):
                     df[col] = df[col].astype(np.float16)
                 elif (
-                    c_min > np.finfo(np.float32).min and c_max < np.finfo(np.float32).max
+                    c_min > np.finfo(np.float32).min
+                    and c_max < np.finfo(np.float32).max
                 ):
                     df[col] = df[col].astype(np.float32)
                 else:
@@ -78,6 +86,7 @@ def reduce_mem_usage(df):
     print(f"Memory usage after optimization is: {end_mem} GB")
     print(f"Decreased by {100 * (start_mem - end_mem) / start_mem}%")
     return df
+
 
 def get_config_as_dict(config_name):
     out = dict()
@@ -308,7 +317,7 @@ def fit_shuflle(
         persistent_workers=config.PRESISTENT_WORKERS,
         collate_fn=config.COLLAT_FN,
     )
-    
+
     wandb.init(
         project="ice",
         entity="kaggle-hi",
@@ -378,9 +387,151 @@ def fit_shuflle(
         # calculating metric
         metric_ = metric(torch.cat(pred), torch.cat(gt))
         # saving predictions
-        #save_pred_as_csv(
+        # save_pred_as_csv(
         #    torch.cat(pred), torch.cat(gt), name=f"{Path(folder)/exp_name}_OOF_{i}.csv"
-        #)
+        # )
+        # saving model if necessary
+        save_md(metric_, model, i)
+
+        val_loss /= mb.child.total
+
+        wandb.log(
+            {
+                "epoch": i,
+                "train_loss": trn_loss,
+                "valid_loss": val_loss,
+                "metric": metric_,
+            }
+        )
+
+        res = pd.DataFrame(
+            {
+                "epoch": [i],
+                "train_loss": [trn_loss],
+                "valid_loss": [val_loss],
+                "metric": [metric_],
+            }
+        )
+        print(res)
+        res.to_csv(f"{Path(folder)/exp_name}_{i}.csv", index=False)
+        gc.collect()
+    print("Training done")
+
+
+def fit_shuflle_fp32(
+    epochs,
+    model,
+    loss_fn,
+    opt,
+    metric,
+    config,
+    folder="models",
+    exp_name="exp_00",
+    device=None,
+    sched=None,
+    save_md=SaveModelEpoch,
+):
+    if device is None:
+        device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
+
+    os.makedirs(folder, exist_ok=True)
+
+    mb = master_bar(range(epochs))
+    mb.write(["epoch", "train_loss", "valid_loss", "val_metric"], table=True)
+    model.to(device)  # we have to put our model on gpu
+
+    vld_pth = [
+        load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet")
+        for i in range(config.VAL_BATCH_RANGE[0], config.VAL_BATCH_RANGE[1])
+    ]
+
+    vld_pth = concatenate_datasets(vld_pth)
+
+    vld_ds = config.VAL_DATASET(vld_pth)
+
+    valid_dl = DataLoader(
+        vld_ds,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        num_workers=config.NUM_WORKERS,
+        pin_memory=True,
+        persistent_workers=config.PRESISTENT_WORKERS,
+        collate_fn=config.COLLAT_FN,
+    )
+
+    wandb.init(
+        project="ice",
+        entity="kaggle-hi",
+        name=config.EXP_NAME,
+        config=get_config_as_dict(config),
+    )
+    wandb.watch(model)
+
+    for i in mb:  # iterating  epoch
+        trn_loss, val_loss = 0.0, 0.0
+        # shuffling the data before every epoch cheaper than shuffling the dataloader
+
+        nums = [i for i in range(config.TRN_BATCH_RANGE[0], config.TRN_BATCH_RANGE[1])]
+        random.shuffle(nums)
+        trn_pth = [
+            load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet") for i in nums
+        ]
+
+        trn_pth = concatenate_datasets(trn_pth)
+        trn_ds = config.TRN_DATASET(trn_pth)
+
+        train_dl = DataLoader(
+            trn_ds,
+            batch_size=config.BATCH_SIZE,
+            shuffle=False,
+            num_workers=config.NUM_WORKERS,
+            pin_memory=True,
+            persistent_workers=config.PRESISTENT_WORKERS,
+            collate_fn=config.COLLAT_FN,
+        )
+
+        trn_n, val_n = len(train_dl.dataset), len(valid_dl.dataset)
+        model.train()  # set model for training
+        for batch in progress_bar(train_dl, parent=mb):
+            # putting batches to device
+            batch = {k: v.to(device) for k, v in batch.items()}
+            opt.zero_grad()  # zeroing optimizer
+
+            out = model(batch)  # forward pass
+            loss = loss_fn(out, batch["label"])  # calulation loss
+
+            trn_loss += loss.item()
+
+            loss.backward()  # backward
+            opt.step()  # optimizer step
+            if sched is not None:
+                sched.step()  # scuedular step
+
+        trn_loss /= mb.child.total
+
+        # putting model in eval mode
+        model.eval()
+        gt = []
+        pred = []
+        # after epooch is done we can run a validation dataloder and see how are doing
+        with torch.no_grad():
+            for batch in progress_bar(valid_dl, parent=mb):
+                batch = {k: v.to(device) for k, v in batch.items()}
+
+                out = model(batch)  # forward pass
+                loss = loss_fn(out, batch["label"])  # calulation loss
+                val_loss += loss.item()
+
+                gt.append(batch["label"].detach())
+                pred.append(out.detach())
+        # calculating metric
+        metric_ = metric(torch.cat(pred), torch.cat(gt))
+        # saving predictions
+        # save_pred_as_csv(
+        #    torch.cat(pred), torch.cat(gt), name=f"{Path(folder)/exp_name}_OOF_{i}.csv"
+        # )
         # saving model if necessary
         save_md(metric_, model, i)
 
@@ -467,6 +618,16 @@ def get_score(y_hat, y):
     )
 
 
+def get_score_v1(y_hat,y):
+    azi_pred, zen_pred = y_hat.split(2, 1)
+    y_hat = torch.stack([azi_pred[:, 0], zen_pred[:, 0]], dim=1)
+    return (
+        angular_dist_score(y[:, 0], y[:, 1], y_hat[:, 0], y_hat[:, 1])
+        .detach()
+        .cpu()
+        .numpy()
+    )
+    
 def get_score_vector(y_hat, y):
     y_hat = label_to_df(y_hat.detach().cpu().numpy()[:, :3])
     y = label_to_df(y.detach().cpu().numpy())

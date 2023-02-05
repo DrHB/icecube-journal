@@ -108,7 +108,7 @@ class IceCubeModelEncoderV1(nn.Module):
     def __init__(self):
         super().__init__()
         self.encoder = ContinuousTransformerWrapper(
-            dim_in=6,
+            dim_in=8,
             dim_out=128,
             max_seq_len=150,
             attn_layers=Encoder(dim=128, depth=6, heads=8),
