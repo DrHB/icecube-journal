@@ -22,6 +22,9 @@ def seed(seed=0):
 def train(cfg):
     seed()
     custom_model = cfg.MODEL_NAME()
+    if cfg.MODEL_WTS:
+        print(f"Loading model weights from {cfg.MODEL_WTS}")
+        custom_model.load_state_dict(torch.load(cfg.MODEL_WTS))
     opt = cfg.OPT(
         custom_model.parameters(), lr=cfg.LR, weight_decay=cfg.WD
     )

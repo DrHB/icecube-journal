@@ -5,7 +5,7 @@ __all__ = ['loss_fn_azi', 'loss_fn_zen', 'MeanPoolingWithMask', 'CombineLossV0',
 
 # %% ../nbs/02_modelsgraph.ipynb 1
 import sys
-sys.path.append('/opt/slh/graphnet-main/src')
+sys.path.append('/opt/slh/archive/software/graphnet/src')
 import torch
 from x_transformers import ContinuousTransformerWrapper, Encoder, Decoder
 from torch import nn

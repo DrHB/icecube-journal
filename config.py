@@ -8,13 +8,13 @@ from icecube.dataset import (
     HuggingFaceDatasetV5,
     HuggingFaceDatasetV6,
     HuggingFaceDatasetV7,
+    HuggingFaceDatasetV8,
     HuggingFaceDatasetGraphV0,
     HuggingFaceDatasetGraphV1,
 )
 
-#from icecube.modelsgraph import EncoderWithReconstructionLossV0, CombineLossV0
+# from icecube.modelsgraph import EncoderWithReconstructionLossV0, CombineLossV0
 from pathlib import Path
-from icecube.utils import collate_fn, collate_fn_v1, collate_fn_graphv0
 import torch
 from transformers.optimization import (
     get_linear_schedule_with_warmup,
@@ -28,6 +28,7 @@ from icecube.models import (
     IceCubeModelEncoderV1,
     IceCubeModelEncoderV2,
     IceCubeModelEncoderV1CombinePool,
+    EncoderWithDirectionReconstruction,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
@@ -35,7 +36,16 @@ from icecube.models import (
     IceCubeModelEncoderMAT,
     IceCubeModelEncoderMATMasked,
 )
-from icecube.utils import fit_shuflle, get_score, get_score_vector, fit_shuflle_fp32, get_score_v1
+from icecube.utils import (
+    fit_shuflle,
+    get_score,
+    get_score_vector,
+    fit_shuflle_fp32,
+    get_score_v1,
+    collate_fn,
+    collate_fn_v1,
+    collate_fn_graphv0,
+)
 from torch import nn
 
 
@@ -169,10 +179,34 @@ class BASELINE_HF_V4(BASELINE_HF_V3):
     EXP_NAME = "EXP_13"
     TRN_DATASET = HuggingFaceDatasetV7
     VAL_DATASET = HuggingFaceDatasetV7
-    
+
+
 class BASELINE_HF_V5(BASELINE_HF_V4):
     EXP_NAME = "EXP_14"
     MODEL_NAME = IceCubeModelEncoderV1CombinePool
     
-
+class BASELINE_HF_V6(BASELINE_HF_V4):
+    EXP_NAME = "EXP_15"
+    MODEL_NAME = IceCubeModelEncoderV1CombinePool
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_14/EXP_14_9.pth"
     
+class BASELINE_HF_V7(BASELINE_HF_V4):
+    EXP_NAME = "EXP_16"
+    MODEL_NAME = EncoderWithDirectionReconstruction
+    LOSS_FUNC = VonMisesFisher3DLoss
+    METRIC = get_score_vector
+    TRN_DATASET = HuggingFaceDatasetV8
+    VAL_DATASET = HuggingFaceDatasetV8
+    MODEL_WTS = False
+    
+class BASELINE_HF_V8(BASELINE_HF_V7):
+    EXP_NAME = "EXP_17"
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_16/EXP_16_9.pth'
+
+
+#class BASELINE_HF_V6(BASELINE_HF_V4):
+#    EXP_NAME = "EXP_15"
+#    MODEL_NAME = EncoderWithReconstructionLossV0
+#    LOSS_FUNC = CombineLossV0
+#    METRIC = get_score_v1
+#
