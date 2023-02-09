@@ -24,6 +24,7 @@ from transformers.optimization import (
 
 from icecube.models import (
     LogCoshLoss,
+    VonMisesFisher2DLossL1Loss,
     VonMisesFisher3DLoss,
     VonMisesFisher3DLossCosineSimularityLoss,
     IceCubeModelEncoderV0,
@@ -33,6 +34,7 @@ from icecube.models import (
     EncoderWithDirectionReconstruction,
     EncoderWithDirectionReconstructionV1,
     EncoderWithDirectionReconstructionV2,
+    EncoderWithDirectionReconstructionV3,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
@@ -231,9 +233,12 @@ class BASELINE_HF_V10(BASELINE_HF_V7):
 
 
 
-#class BASELINE_HF_V6(BASELINE_HF_V4):
-#    EXP_NAME = "EXP_15"
-#    MODEL_NAME = EncoderWithReconstructionLossV0
-#    LOSS_FUNC = CombineLossV0
+#class BASELINE_HF_V11(BASELINE_HF_V4):
+#    EXP_NAME = "EXP_21"
+#    MODEL_NAME = EncoderWithDirectionReconstructionV3
+#    LOSS_FUNC = VonMisesFisher2DLossL1Loss
 #    METRIC = get_score_v1
+#    TRN_BATCH_RANGE = (1, 100)
+#    VAL_BATCH_RANGE = (622, 627)
+#    MODEL_WTS = False
 #

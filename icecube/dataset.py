@@ -863,7 +863,7 @@ class HuggingFaceDatasetV9(Dataset):
         return batch
 
 
-# %% ../nbs/00_dataset.ipynb 11
+# %% ../nbs/00_dataset.ipynb 12
 # pytorch function that takes [n, x, y, z] tensor and calculates the distance between each point and returns [n x n] matrix using torch.cdist
 def get_distance_matrix(xyz):
     return torch.cdist(xyz, xyz)
@@ -1032,6 +1032,6 @@ class HuggingFaceDatasetGraphV1(Dataset):
 
 
 
-# %% ../nbs/00_dataset.ipynb 13
+# %% ../nbs/00_dataset.ipynb 14
 def good_luck():
     return True
