@@ -9,6 +9,7 @@ from icecube.dataset import (
     HuggingFaceDatasetV6,
     HuggingFaceDatasetV7,
     HuggingFaceDatasetV8,
+    HuggingFaceDatasetV9,
     HuggingFaceDatasetGraphV0,
     HuggingFaceDatasetGraphV1,
 )
@@ -24,11 +25,14 @@ from transformers.optimization import (
 from icecube.models import (
     LogCoshLoss,
     VonMisesFisher3DLoss,
+    VonMisesFisher3DLossCosineSimularityLoss,
     IceCubeModelEncoderV0,
     IceCubeModelEncoderV1,
     IceCubeModelEncoderV2,
     IceCubeModelEncoderV1CombinePool,
     EncoderWithDirectionReconstruction,
+    EncoderWithDirectionReconstructionV1,
+    EncoderWithDirectionReconstructionV2,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
@@ -202,6 +206,29 @@ class BASELINE_HF_V7(BASELINE_HF_V4):
 class BASELINE_HF_V8(BASELINE_HF_V7):
     EXP_NAME = "EXP_17"
     MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_16/EXP_16_9.pth'
+    
+class BASELINE_HF_V8FT(BASELINE_HF_V7):
+    EXP_NAME = "EXP_18"
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_17/EXP_17_9.pth'
+    TRN_BATCH_RANGE = (1, 600)
+    VAL_BATCH_RANGE = (622, 627)
+    EPOCHS = 5
+    
+class BASELINE_HF_V9(BASELINE_HF_V7):
+    EXP_NAME = "EXP_19"
+    TRN_DATASET = HuggingFaceDatasetV9
+    VAL_DATASET = HuggingFaceDatasetV9
+    MODEL_NAME = EncoderWithDirectionReconstructionV1
+    
+class BASELINE_HF_V10(BASELINE_HF_V7):
+    EXP_NAME = "EXP_20"
+    TRN_DATASET = HuggingFaceDatasetV9
+    VAL_DATASET = HuggingFaceDatasetV9
+    MODEL_NAME = EncoderWithDirectionReconstructionV2
+    LOSS_FUNC = VonMisesFisher3DLossCosineSimularityLoss
+    NUM_WORKERS = 20
+    
+
 
 
 #class BASELINE_HF_V6(BASELINE_HF_V4):
