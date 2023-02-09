@@ -24,7 +24,8 @@
 |EXP_17 |`1.017`| same as `EXP_16` but finetuning using weights from `EXP_16` and increased `max_event=148` | `!CUDA_VISIBLE_DEVICES=1 python train.py --config_name BASELINE_HF_V8` |`(1, 100)`|
 |EXP_18 || same as `EXP_17` but finetuning using weights from `EXP_17` and with full dataset| `!CUDA_VISIBLE_DEVICES=1 python train.py --config_name BASELINE_HF_V8FT` |`(1, 600)`
 |EXP_19 |`~1.043`| same as `EXP_16` but finetuning using weights from `EXP_16` added `absorption` as feature, `max_events==148`, in total `9` features, models now `pools` on `mean`, `max`, `min`, based on the mask, added `ae` like layer in between the pooling | `!CUDA_VISIBLE_DEVICES=1 python train.py --config_name BASELINE_HF_V9` |`(1, 100)` |
-|EXP_20|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V10` |`(1, 100)`|
+|EXP_20|`1.024`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V10` |`(1, 100)`|
+|EXP_21|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `EucLadianDistanceLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V11` |`(1, 100)`|
 
 ```python
 #embeding dimension changed from 150 to 196 for transformer ecnoder

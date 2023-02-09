@@ -26,6 +26,7 @@ from icecube.models import (
     LogCoshLoss,
     VonMisesFisher2DLossL1Loss,
     VonMisesFisher3DLoss,
+    VonMisesFisher3DLossEcludeLoss,
     VonMisesFisher3DLossCosineSimularityLoss,
     IceCubeModelEncoderV0,
     IceCubeModelEncoderV1,
@@ -229,6 +230,12 @@ class BASELINE_HF_V10(BASELINE_HF_V7):
     MODEL_NAME = EncoderWithDirectionReconstructionV2
     LOSS_FUNC = VonMisesFisher3DLossCosineSimularityLoss
     NUM_WORKERS = 20
+    
+class BASELINE_HF_V11(BASELINE_HF_V10):
+    EXP_NAME = "EXP_21"
+    LOSS_FUNC = VonMisesFisher3DLossEcludeLoss
+    NUM_WORKERS = 22
+    
     
 
 
