@@ -1,3 +1,4 @@
+
 from pathlib import Path
 from icecube.dataset import (
     HuggingFaceDatasetV0,
@@ -27,6 +28,7 @@ from icecube.models import (
     VonMisesFisher2DLossL1Loss,
     VonMisesFisher3DLoss,
     VonMisesFisher3DLossEcludeLoss,
+    VonMisesFisher3DLossEcludeLossCosine,
     VonMisesFisher3DLossCosineSimularityLoss,
     IceCubeModelEncoderV0,
     IceCubeModelEncoderV1,
@@ -43,15 +45,21 @@ from icecube.models import (
     IceCubeModelEncoderMAT,
     IceCubeModelEncoderMATMasked,
 )
+
+from icecube.modelsgraph import DynEdgeV0, gVonMisesFisher3DLossEcludeLoss
+from icecube.graphdataset import GraphDasetV0
+
 from icecube.utils import (
     fit_shuflle,
     get_score,
+    gfit_shuflle,
     get_score_vector,
     fit_shuflle_fp32,
     get_score_v1,
     collate_fn,
     collate_fn_v1,
     collate_fn_graphv0,
+    gget_score_vector,
 )
 from torch import nn
 
@@ -191,12 +199,14 @@ class BASELINE_HF_V4(BASELINE_HF_V3):
 class BASELINE_HF_V5(BASELINE_HF_V4):
     EXP_NAME = "EXP_14"
     MODEL_NAME = IceCubeModelEncoderV1CombinePool
-    
+
+
 class BASELINE_HF_V6(BASELINE_HF_V4):
     EXP_NAME = "EXP_15"
     MODEL_NAME = IceCubeModelEncoderV1CombinePool
     MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_14/EXP_14_9.pth"
-    
+
+
 class BASELINE_HF_V7(BASELINE_HF_V4):
     EXP_NAME = "EXP_16"
     MODEL_NAME = EncoderWithDirectionReconstruction
@@ -205,24 +215,28 @@ class BASELINE_HF_V7(BASELINE_HF_V4):
     TRN_DATASET = HuggingFaceDatasetV8
     VAL_DATASET = HuggingFaceDatasetV8
     MODEL_WTS = False
-    
+
+
 class BASELINE_HF_V8(BASELINE_HF_V7):
     EXP_NAME = "EXP_17"
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_16/EXP_16_9.pth'
-    
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_16/EXP_16_9.pth"
+
+
 class BASELINE_HF_V8FT(BASELINE_HF_V7):
     EXP_NAME = "EXP_18"
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_17/EXP_17_9.pth'
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_17/EXP_17_9.pth"
     TRN_BATCH_RANGE = (1, 600)
     VAL_BATCH_RANGE = (622, 627)
     EPOCHS = 5
-    
+
+
 class BASELINE_HF_V9(BASELINE_HF_V7):
     EXP_NAME = "EXP_19"
     TRN_DATASET = HuggingFaceDatasetV9
     VAL_DATASET = HuggingFaceDatasetV9
     MODEL_NAME = EncoderWithDirectionReconstructionV1
-    
+
+
 class BASELINE_HF_V10(BASELINE_HF_V7):
     EXP_NAME = "EXP_20"
     TRN_DATASET = HuggingFaceDatasetV9
@@ -230,17 +244,32 @@ class BASELINE_HF_V10(BASELINE_HF_V7):
     MODEL_NAME = EncoderWithDirectionReconstructionV2
     LOSS_FUNC = VonMisesFisher3DLossCosineSimularityLoss
     NUM_WORKERS = 20
-    
+
+
 class BASELINE_HF_V11(BASELINE_HF_V10):
     EXP_NAME = "EXP_21"
     LOSS_FUNC = VonMisesFisher3DLossEcludeLoss
     NUM_WORKERS = 22
-    
-    
 
 
+class BASELINE_HF_V12(BASELINE_HF_V10):
+    EXP_NAME = "EXP_22"
+    LOSS_FUNC = VonMisesFisher3DLossEcludeLossCosine
+    NUM_WORKERS = 22
 
-#class BASELINE_HF_V11(BASELINE_HF_V4):
+
+class BASELINE_graph_V0(BASELINE_HF_V10):
+    EXP_NAME = "EXP_23"
+    LOSS_FUNC = gVonMisesFisher3DLossEcludeLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = DynEdgeV0
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+
+
+# class BASELINE_HF_V11(BASELINE_HF_V4):
 #    EXP_NAME = "EXP_21"
 #    MODEL_NAME = EncoderWithDirectionReconstructionV3
 #    LOSS_FUNC = VonMisesFisher2DLossL1Loss
@@ -248,4 +277,4 @@ class BASELINE_HF_V11(BASELINE_HF_V10):
 #    TRN_BATCH_RANGE = (1, 100)
 #    VAL_BATCH_RANGE = (622, 627)
 #    MODEL_WTS = False
-#
+# 2

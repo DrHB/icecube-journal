@@ -123,9 +123,9 @@ class GraphDasetV0(gDataset):
     def __init__(
         self,
         ds,
-        max_events=128,
+        max_events=196,
         transform=None,
-        pre_transform= KNNGraphBuilder(nb_nearest_neighbours=8, columns=[0, 1, 2]),
+        pre_transform= KNNGraphBuilder(nb_nearest_neighbours=8, columns=[0, 1, 2, 3]),
         pre_filter=None,
     ):
         super().__init__(transform, pre_transform, pre_filter)

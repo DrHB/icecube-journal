@@ -2,9 +2,9 @@
 
 # %% auto 0
 __all__ = ['DIST_KERNELS', 'VonMisesFisher3DLossCosineSimularityLoss', 'VonMisesFisher3DLossEcludeLoss',
-           'VonMisesFisher2DLossL1Loss', 'LogCoshLoss', 'SigmoidRange', 'Adjustoutput', 'PoolingWithMask',
-           'MeanPoolingWithMask', 'FeedForward', 'IceCubeModelEncoderV0', 'IceCubeModelEncoderV1',
-           'IceCubeModelEncoderV1CombinePool', 'always', 'l2norm', 'TokenEmbedding',
+           'VonMisesFisher3DLossEcludeLossCosine', 'VonMisesFisher2DLossL1Loss', 'LogCoshLoss', 'SigmoidRange',
+           'Adjustoutput', 'PoolingWithMask', 'MeanPoolingWithMask', 'FeedForward', 'IceCubeModelEncoderV0',
+           'IceCubeModelEncoderV1', 'IceCubeModelEncoderV1CombinePool', 'always', 'l2norm', 'TokenEmbedding',
            'IceCubeModelEncoderSensorEmbeddinng', 'IceCubeModelEncoderSensorEmbeddinngV1', 'TokenEmbeddingV2',
            'IceCubeModelEncoderSensorEmbeddinngV2', 'IceCubeModelEncoderSensorEmbeddinngV3', 'IceCubeModelEncoderV2',
            'EncoderWithDirectionReconstruction', 'EncoderWithDirectionReconstructionV1',
@@ -50,6 +50,19 @@ class VonMisesFisher3DLossEcludeLoss(nn.Module):
         
     def forward(self, y_pred, y_true):
         return (self.vonmis(y_pred, y_true) + self.cosine(y_pred[:, :3], y_true))/2
+    
+class VonMisesFisher3DLossEcludeLossCosine(nn.Module):
+    def __init__(self, eps=1e-8):
+        super().__init__()
+        self.vonmis = VonMisesFisher3DLoss()
+        self.cosine =  nn.CosineSimilarity(dim=1, eps=eps)
+        self.euclud = EuclideanDistanceLoss()
+        self.eps = eps
+        
+    def forward(self, y_pred, y_true):
+        return (self.vonmis(y_pred, y_true) + 
+                (self.euclud(y_pred[:, :3], y_true) + self.eps) +
+                (1-self.cosine(y_pred[:, :3], y_true).mean()))/3
     
 
 
