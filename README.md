@@ -27,8 +27,7 @@
 |EXP_20|`1.024`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V10` |`(1, 100)`|
 |EXP_21|`1.025`| got NaN at some point, but loss was still better same as `EXP_16` but using `VonMisesFisher3DLoss` and `EucLadianDistanceLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V11` |`(1, 100)`|
 |EXP_22|`ES`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `EucLadianDistanceLoss` and `CosineSimilarityLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V11` |`(1, 100)`|
-|EXP_23|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `EucLadianDistanceLoss` and `CosineSimilarityLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V11` |`(1, 100)`|
-|EXP_24|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `GraphNet`, the `KNN` grouping is performed using `xyzt` and max_events are `196`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V0` |`(1, 100)`|
+|EXP_23|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `GraphNet`, the `KNN` grouping is performed using `xyzt` and max_events are `196`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V0` |`(1, 100)`|
 
 ```python
 #embeding dimension changed from 150 to 196 for transformer ecnoder
