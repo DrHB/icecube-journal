@@ -1,4 +1,3 @@
-
 from pathlib import Path
 from icecube.dataset import (
     HuggingFaceDatasetV0,
@@ -26,6 +25,7 @@ from transformers.optimization import (
 from icecube.models import (
     LogCoshLoss,
     VonMisesFisher2DLossL1Loss,
+    EuclideanDistanceLossG,
     VonMisesFisher3DLoss,
     VonMisesFisher3DLossEcludeLoss,
     VonMisesFisher3DLossEcludeLossCosine,
@@ -38,6 +38,7 @@ from icecube.models import (
     EncoderWithDirectionReconstructionV1,
     EncoderWithDirectionReconstructionV2,
     EncoderWithDirectionReconstructionV3,
+    EncoderWithDirectionReconstructionV4,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
@@ -46,7 +47,13 @@ from icecube.models import (
     IceCubeModelEncoderMATMasked,
 )
 
-from icecube.modelsgraph import DynEdgeV0, gVonMisesFisher3DLossEcludeLoss
+from icecube.modelsgraph import (
+    DynEdgeV0,
+    gVonMisesFisher3DLossEcludeLoss,
+    gVonMisesFisher3DLoss,
+    gVonMisesFisher3DLossCosineSimularityLoss,
+    DynEdgeV1,
+)
 from icecube.graphdataset import GraphDasetV0
 
 from icecube.utils import (
@@ -54,12 +61,13 @@ from icecube.utils import (
     get_score,
     gfit_shuflle,
     get_score_vector,
-    fit_shuflle_fp32,
     get_score_v1,
     collate_fn,
     collate_fn_v1,
     collate_fn_graphv0,
     gget_score_vector,
+    gget_score_save,
+    eval_save,
 )
 from torch import nn
 
@@ -230,6 +238,13 @@ class BASELINE_HF_V8FT(BASELINE_HF_V7):
     EPOCHS = 5
 
 
+class BASELINE_HF_V8FTEVAL(BASELINE_HF_V8FT):
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_18/EXP_18_4.pth"
+    METRIC = gget_score_save
+    FIT_FUNC = eval_save
+    DEVICE = "cuda:1"
+
+
 class BASELINE_HF_V9(BASELINE_HF_V7):
     EXP_NAME = "EXP_19"
     TRN_DATASET = HuggingFaceDatasetV9
@@ -260,13 +275,35 @@ class BASELINE_HF_V12(BASELINE_HF_V10):
 
 class BASELINE_graph_V0(BASELINE_HF_V10):
     EXP_NAME = "EXP_23"
-    LOSS_FUNC = gVonMisesFisher3DLossEcludeLoss
+    LOSS_FUNC = gVonMisesFisher3DLoss
     NUM_WORKERS = 22
     MODEL_NAME = DynEdgeV0
     FIT_FUNC = gfit_shuflle
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
+
+
+class BASELINE_HF_V13(BASELINE_HF_V10):
+    EXP_NAME = "EXP_24"
+    LOSS_FUNC = VonMisesFisher3DLossCosineSimularityLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = EncoderWithDirectionReconstructionV4
+    DEVICE = "cuda:0"
+    BATCH_SIZE = 1024 + 256
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+
+
+class BASELINE_graph_V1(BASELINE_HF_V10):
+    EXP_NAME = "EXP_25"
+    LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = DynEdgeV1
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
 
 
 # class BASELINE_HF_V11(BASELINE_HF_V4):

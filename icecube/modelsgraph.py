@@ -2,7 +2,9 @@
 
 # %% auto 0
 __all__ = ['loss_fn_azi', 'loss_fn_zen', 'GLOBAL_POOLINGS', 'MeanPoolingWithMask', 'CombineLossV0',
-           'EncoderWithReconstructionLossV0', 'gVonMisesFisher3DLossEcludeLoss', 'DynEdgeConv', 'DynEdge', 'DynEdgeV0']
+           'EncoderWithReconstructionLossV0', 'EuclideanDistanceLossG', 'gVonMisesFisher3DLossEcludeLoss',
+           'gVonMisesFisher3DLoss', 'gVonMisesFisher3DLossCosineSimularityLoss', 'DynEdgeConv', 'DynEdge', 'DynEdgeV0',
+           'DynEdgeV1']
 
 # %% ../nbs/02_modelsgraph.ipynb 1
 import sys
@@ -94,15 +96,50 @@ class EncoderWithReconstructionLossV0(nn.Module):
         return torch.concat([az, zn], 1)
 
 # %% ../nbs/02_modelsgraph.ipynb 6
+class EuclideanDistanceLossG(torch.nn.Module):
+    def __init__(self, eps=1e-6, reduction='mean'):
+        super().__init__()
+        self.eps = eps
+        self.reduction = reduction
+        
+    def forward(self, prediction, target):
+        diff = prediction - target
+        loss = torch.norm(diff, dim=1) + self.eps
+        if self.reduction == 'mean':
+            loss = torch.mean(loss)
+        elif self.reduction == 'sum':
+            loss = torch.sum(loss)
+        return loss
+
 class gVonMisesFisher3DLossEcludeLoss(nn.Module):
     def __init__(self, eps=1e-8):
         super().__init__()
         self.vonmis = VonMisesFisher3DLoss()
-        self.cosine = EuclideanDistanceLoss()
+        self.cosine = EuclideanDistanceLossG()
         
     def forward(self, y_pred, y_true):
         y_true = y_true.reshape(-1, 3)
         return (self.vonmis(y_pred, y_true) + self.cosine(y_pred[:, :3], y_true))/2
+    
+    
+class gVonMisesFisher3DLoss(nn.Module):
+    def __init__(self, eps=1e-8):
+        super().__init__()
+        self.vonmis = VonMisesFisher3DLoss()
+        
+    def forward(self, y_pred, y_true):
+        y_true = y_true.reshape(-1, 3)
+        return self.vonmis(y_pred, y_true)
+    
+class gVonMisesFisher3DLossCosineSimularityLoss(nn.Module):
+    def __init__(self, eps=1e-8):
+        super().__init__()
+        self.vonmis = VonMisesFisher3DLoss()
+        self.cosine = nn.CosineSimilarity(dim=1, eps=eps)
+        
+    def forward(self, y_pred, y_true):
+        y_true = y_true.reshape(-1, 3)
+        return (self.vonmis(y_pred, y_true) + (1-self.cosine(y_pred[:, :3], y_true).mean()))/2
     
     
 GLOBAL_POOLINGS = {
@@ -472,6 +509,27 @@ class DynEdgeV0(nn.Module):
             nb_neighbours=8,
             global_pooling_schemes=["min", "max", "mean", "sum"],
             features_subset=slice(0, 4),  # NN search using xyzt
+        )
+
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=self.encoder.nb_outputs,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+
+    def forward(self, batch):
+        x = self.encoder(batch)
+        x = self.out(x)
+        return x
+    
+class DynEdgeV1(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = DynEdge(
+            nb_inputs=9,
+            nb_neighbours=8,
+            global_pooling_schemes=["min", "max", "mean", "sum"],
+            features_subset=slice(0, 3),  # NN search using xyz3
         )
 
         self.out = DirectionReconstructionWithKappa(

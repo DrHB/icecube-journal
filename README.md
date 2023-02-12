@@ -22,12 +22,15 @@
 |EXP_14 |`1.142`| same as `EXP_13` but with `mean` and `max` masked `pool` concataneted| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V5` |`(1, 100)` |
 |EXP_16 |`1.043`| This experiment I am using again transformer encoder with `6` layers, pooling on mask, normalization is performed in following way. For `xyz` we divide by `500` for charge its `log10` and for time its `(event["time"].values - 1.0e04) / 3.0e4`, added additional features; `qe` outer layer of the icecube and added ice_scattering. The dataset is filtered using light speed travel distance if it exceed more then `128` rows, double pooling (`mean` and `max`) using `mask`, loss function  `VonMisesFisher3DLoss`| `!CUDA_VISIBLE_DEVICES=1 python train.py --config_name BASELINE_HF_V7` |`(1, 100)` |
 |EXP_17 |`1.017`| same as `EXP_16` but finetuning using weights from `EXP_16` and increased `max_event=148` | `!CUDA_VISIBLE_DEVICES=1 python train.py --config_name BASELINE_HF_V8` |`(1, 100)`|
-|EXP_18 || same as `EXP_17` but finetuning using weights from `EXP_17` and with full dataset| `!CUDA_VISIBLE_DEVICES=1 python train.py --config_name BASELINE_HF_V8FT` |`(1, 600)`
+|EXP_18 |`1.08`/LB: `1.06`| same as `EXP_17` but finetuning using weights from `EXP_17` and with full dataset| `!CUDA_VISIBLE_DEVICES=1 python train.py --config_name BASELINE_HF_V8FT` |`(1, 600)`
 |EXP_19 |`~1.043`| same as `EXP_16` but finetuning using weights from `EXP_16` added `absorption` as feature, `max_events==148`, in total `9` features, models now `pools` on `mean`, `max`, `min`, based on the mask, added `ae` like layer in between the pooling | `!CUDA_VISIBLE_DEVICES=1 python train.py --config_name BASELINE_HF_V9` |`(1, 100)` |
 |EXP_20|`1.024`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V10` |`(1, 100)`|
 |EXP_21|`1.025`| got NaN at some point, but loss was still better same as `EXP_16` but using `VonMisesFisher3DLoss` and `EucLadianDistanceLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V11` |`(1, 100)`|
 |EXP_22|`ES`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `EucLadianDistanceLoss` and `CosineSimilarityLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V11` |`(1, 100)`|
-|EXP_23|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `GraphNet`, the `KNN` grouping is performed using `xyzt` and max_events are `196`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V0` |`(1, 100)`|
+|EXP_23|`1.02`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `GraphNet`, the `KNN` grouping is performed using `xyzt` and max_events are `196`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V0` |`(1, 100)`|
+|EXP_24|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`, transformer `encoder` `8` layers, added `rotatry_emb` and `ff_glu`, and `post_emb_normalazation`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V13` |`(1, 100)`|
+|EXP_25|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss` and `GraphNet`, the `KNN` grouping is performed using `xyz` and max_events are `196`, the first grouping in dataloder is done using `xyzt`, i am cycling thru training (going thru all batches)| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V0` |`(1, 100)`|
+
 
 ```python
 #embeding dimension changed from 150 to 196 for transformer ecnoder

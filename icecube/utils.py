@@ -2,9 +2,10 @@
 
 # %% auto 0
 __all__ = ['label_to_df', 'get_size', 'reduce_mem_usage', 'get_config_as_dict', 'save_folder', 'save_pred_as_csv', 'SaveModel',
-           'SaveModelMetric', 'SaveModelEpoch', 'fit', 'fit_shuflle', 'gfit_shuflle', 'fit_shuflle_fp32',
-           'compare_events', 'get_batch_paths', 'angular_dist_score', 'get_score', 'get_score_v1', 'get_score_vector',
-           'gget_score_vector', 'collate_fn', 'collate_fn_v1', 'collate_fn_graphv0', 'good_luck']
+           'SaveModelMetric', 'SaveModelEpoch', 'fit', 'fit_shuflle', 'gfit_shuflle', 'compare_events',
+           'get_batch_paths', 'angular_dist_score', 'get_score', 'get_score_v1', 'get_score_vector',
+           'gget_score_vector', 'gget_score_save', 'collate_fn', 'collate_fn_v1', 'collate_fn_graphv0', 'eval_save',
+           'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -25,6 +26,7 @@ from datasets import load_dataset, load_from_disk, concatenate_datasets
 import random
 import wandb
 from torch_geometric.loader import DataLoader as gDataLoader
+from itertools import cycle
 
 # %% ../nbs/00_utils.ipynb 2
 def label_to_df(label, angle_post_fix="", vec_post_fix=""):
@@ -326,11 +328,13 @@ def fit_shuflle(
     )
     wandb.watch(model)
 
+    trn_batch_range = cycle(config.TRN_BATCH_RANGE)
     for i in mb:  # iterating  epoch
         trn_loss, val_loss = 0.0, 0.0
         # shuffling the data before every epoch cheaper than shuffling the dataloader
-
-        nums = [i for i in range(config.TRN_BATCH_RANGE[0], config.TRN_BATCH_RANGE[1])]
+        trn_range = next(trn_batch_range)
+        print(f"trn_range: {trn_range}")
+        nums = [i for i in range(trn_range[0], trn_range[1])]
         random.shuffle(nums)
         trn_pth = [
             load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet") for i in nums
@@ -470,11 +474,13 @@ def gfit_shuflle(
     )
     wandb.watch(model)
 
+    trn_batch_range = cycle(config.TRN_BATCH_RANGE)
     for i in mb:  # iterating  epoch
         trn_loss, val_loss = 0.0, 0.0
         # shuffling the data before every epoch cheaper than shuffling the dataloader
-
-        nums = [i for i in range(config.TRN_BATCH_RANGE[0], config.TRN_BATCH_RANGE[1])]
+        trn_range = next(trn_batch_range)
+        print(f"trn_range: {trn_range}")
+        nums = [i for i in range(trn_range[0], trn_range[1])]
         random.shuffle(nums)
         trn_pth = [
             load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet") for i in nums
@@ -562,147 +568,6 @@ def gfit_shuflle(
 
 
 
-def fit_shuflle_fp32(
-    epochs,
-    model,
-    loss_fn,
-    opt,
-    metric,
-    config,
-    folder="models",
-    exp_name="exp_00",
-    device=None,
-    sched=None,
-    save_md=SaveModelEpoch,
-):
-    if device is None:
-        device = (
-            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        )
-
-    os.makedirs(folder, exist_ok=True)
-
-    mb = master_bar(range(epochs))
-    mb.write(["epoch", "train_loss", "valid_loss", "val_metric"], table=True)
-    model.to(device)  # we have to put our model on gpu
-
-    vld_pth = [
-        load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet")
-        for i in range(config.VAL_BATCH_RANGE[0], config.VAL_BATCH_RANGE[1])
-    ]
-
-    vld_pth = concatenate_datasets(vld_pth)
-
-    vld_ds = config.VAL_DATASET(vld_pth)
-
-    valid_dl = DataLoader(
-        vld_ds,
-        batch_size=config.BATCH_SIZE,
-        shuffle=False,
-        num_workers=config.NUM_WORKERS,
-        pin_memory=True,
-        persistent_workers=config.PRESISTENT_WORKERS,
-        collate_fn=config.COLLAT_FN,
-    )
-
-    wandb.init(
-        project="ice",
-        entity="kaggle-hi",
-        name=config.EXP_NAME,
-        config=get_config_as_dict(config),
-    )
-    wandb.watch(model)
-
-    for i in mb:  # iterating  epoch
-        trn_loss, val_loss = 0.0, 0.0
-        # shuffling the data before every epoch cheaper than shuffling the dataloader
-
-        nums = [i for i in range(config.TRN_BATCH_RANGE[0], config.TRN_BATCH_RANGE[1])]
-        random.shuffle(nums)
-        trn_pth = [
-            load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet") for i in nums
-        ]
-
-        trn_pth = concatenate_datasets(trn_pth)
-        trn_ds = config.TRN_DATASET(trn_pth)
-
-        train_dl = DataLoader(
-            trn_ds,
-            batch_size=config.BATCH_SIZE,
-            shuffle=False,
-            num_workers=config.NUM_WORKERS,
-            pin_memory=True,
-            persistent_workers=config.PRESISTENT_WORKERS,
-            collate_fn=config.COLLAT_FN,
-        )
-
-        trn_n, val_n = len(train_dl.dataset), len(valid_dl.dataset)
-        model.train()  # set model for training
-        for batch in progress_bar(train_dl, parent=mb):
-            # putting batches to device
-            batch = {k: v.to(device) for k, v in batch.items()}
-            opt.zero_grad()  # zeroing optimizer
-
-            out = model(batch)  # forward pass
-            loss = loss_fn(out, batch["label"])  # calulation loss
-
-            trn_loss += loss.item()
-
-            loss.backward()  # backward
-            opt.step()  # optimizer step
-            if sched is not None:
-                sched.step()  # scuedular step
-
-        trn_loss /= mb.child.total
-
-        # putting model in eval mode
-        model.eval()
-        gt = []
-        pred = []
-        # after epooch is done we can run a validation dataloder and see how are doing
-        with torch.no_grad():
-            for batch in progress_bar(valid_dl, parent=mb):
-                batch = {k: v.to(device) for k, v in batch.items()}
-
-                out = model(batch)  # forward pass
-                loss = loss_fn(out, batch["label"])  # calulation loss
-                val_loss += loss.item()
-
-                gt.append(batch["label"].detach())
-                pred.append(out.detach())
-        # calculating metric
-        metric_ = metric(torch.cat(pred), torch.cat(gt))
-        # saving predictions
-        # save_pred_as_csv(
-        #    torch.cat(pred), torch.cat(gt), name=f"{Path(folder)/exp_name}_OOF_{i}.csv"
-        # )
-        # saving model if necessary
-        save_md(metric_, model, i)
-
-        val_loss /= mb.child.total
-
-        wandb.log(
-            {
-                "epoch": i,
-                "train_loss": trn_loss,
-                "valid_loss": val_loss,
-                "metric": metric_,
-            }
-        )
-
-        res = pd.DataFrame(
-            {
-                "epoch": [i],
-                "train_loss": [trn_loss],
-                "valid_loss": [val_loss],
-                "metric": [metric_],
-            }
-        )
-        print(res)
-        res.to_csv(f"{Path(folder)/exp_name}_{i}.csv", index=False)
-        gc.collect()
-    print("Training done")
-
 
 # %% ../nbs/00_utils.ipynb 8
 #function that compares events from parquet and pth files
@@ -788,22 +653,34 @@ def get_score_vector(y_hat, y):
         .numpy()
     )
 
-def gget_score_vector(y_hat, y):
+
+def gget_score_vector(y_hat, y, return_df=False):
     y_hat = label_to_df(y_hat.detach().cpu().numpy()[:, :3])
     y = label_to_df(y.reshape(-1, 3).detach().cpu().numpy())
-
-    return (
-        angular_dist_score(
+    score = angular_dist_score(
             torch.tensor(y["azimuth"].values, dtype=torch.float32),
             torch.tensor(y["zenith"].values, dtype=torch.float32),
             torch.tensor(y_hat["azimuth"].values, dtype=torch.float32),
             torch.tensor(y_hat["zenith"].values, dtype=torch.float32),
-        )
-        .detach()
-        .cpu()
-        .numpy()
-    )
+        ).detach().cpu().numpy()
+    if return_df:
+        return score, y, y_hat
+    return score
 
+
+
+def gget_score_save(y_hat, y, return_df=False):
+    y_hat = label_to_df(y_hat.detach().cpu().numpy()[:, :3])
+    y = label_to_df(y.reshape(-1, 3).detach().cpu().numpy())
+    score = angular_dist_score(
+            torch.tensor(y["azimuth"].values, dtype=torch.float32),
+            torch.tensor(y["zenith"].values, dtype=torch.float32),
+            torch.tensor(y_hat["azimuth"].values, dtype=torch.float32),
+            torch.tensor(y_hat["zenith"].values, dtype=torch.float32),
+        ).detach().cpu().numpy()
+    if return_df:
+        return score, y, y_hat
+    return score
 
 def collate_fn(batch):
     event = [x["event"] for x in batch]
@@ -854,6 +731,75 @@ def collate_fn_graphv0(batch):
         "adjecent_matrix": torch.stack(adjecent_matrix),
     }
     return batch
+
+
+
+
+
+def eval_save(
+    epochs,
+    model,
+    loss_fn,
+    opt,
+    metric,
+    config,
+    folder="models",
+    exp_name="exp_00",
+    device=None,
+    sched=None,
+    save_md=SaveModelEpoch,
+):
+    if device is None:
+        device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
+
+
+    mb = master_bar(range(epochs))
+    mb.write(["epoch", "train_loss", "valid_loss", "val_metric"], table=True)
+    model.to(device)  # we have to put our model on gpu
+    scaler = torch.cuda.amp.GradScaler()  # this for half precision training
+
+    vld_pth = [
+        load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet")
+        for i in range(config.VAL_BATCH_RANGE[0], config.VAL_BATCH_RANGE[1])
+    ]
+
+    vld_pth = concatenate_datasets(vld_pth)
+
+    vld_ds = config.VAL_DATASET(vld_pth)
+
+    valid_dl = DataLoader(
+        vld_ds,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        num_workers=config.NUM_WORKERS,
+        pin_memory=True,
+        persistent_workers=config.PRESISTENT_WORKERS,
+        collate_fn=config.COLLAT_FN,
+    )
+
+
+
+    model.eval()
+    gt = []
+    pred = []
+    # after epooch is done we can run a validation dataloder and see how are doing
+    with torch.no_grad():
+        for batch in tqdm(valid_dl):
+            batch = {k: v.to(device) for k, v in batch.items()}
+            with torch.cuda.amp.autocast():  # half precision
+                out = model(batch)  # forward pass
+                loss = loss_fn(out, batch["label"])  # calulation loss  
+            gt.append(batch["label"].detach())
+            pred.append(out.detach())
+    # calculating metric
+    metric_, gt_df, pd_df = metric(torch.cat(pred), torch.cat(gt), return_df=True)
+    print(f"metric: {metric_}")
+
+    gt_df.to_csv(f"{Path(folder)/exp_name}_gt.csv", index=False)
+    pd_df.to_csv(f"{Path(folder)/exp_name}_pd.csv", index=False)
+    
 
 
 # %% ../nbs/00_utils.ipynb 13
