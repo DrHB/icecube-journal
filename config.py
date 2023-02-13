@@ -68,6 +68,7 @@ from icecube.utils import (
     gget_score_vector,
     gget_score_save,
     eval_save,
+    fit_shufllef32,
 )
 from torch import nn
 
@@ -292,7 +293,15 @@ class BASELINE_HF_V13(BASELINE_HF_V10):
     DEVICE = "cuda:0"
     BATCH_SIZE = 1024 + 256
     TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
-
+    
+class BASELINE_HF_V14(BASELINE_HF_V13):
+    EXP_NAME = "EXP_24_FT"
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_24_FT_1.pth'
+    TRN_BATCH_RANGE = [[300, 400], [400, 500], [500, 600], [1, 100], [100, 200], [200, 300], ]
+    LR = 1e-4
+    LOSS_FUNC = VonMisesFisher3DLossCosineSimularityLoss
+    FIT_FUNC = fit_shufllef32
+    EPOCHS = 6
 
 class BASELINE_graph_V1(BASELINE_HF_V10):
     EXP_NAME = "EXP_25"
@@ -303,6 +312,19 @@ class BASELINE_graph_V1(BASELINE_HF_V10):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    
+class BASELINE_graph_V1_FT(BASELINE_HF_V10):
+    EXP_NAME = "EXP_25_FT"
+    LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = DynEdgeV1
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    LR = 1e-4
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_25/EXP_25_9.pth'
     TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
 
 
