@@ -49,10 +49,11 @@ from icecube.models import (
 
 from icecube.modelsgraph import (
     DynEdgeV0,
+    DynEdgeV1,
+    EGNNModel,
     gVonMisesFisher3DLossEcludeLoss,
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
-    DynEdgeV1,
 )
 from icecube.graphdataset import GraphDasetV0
 
@@ -325,6 +326,17 @@ class BASELINE_graph_V1_FT(BASELINE_HF_V10):
     VAL_DATASET = GraphDasetV0
     LR = 1e-4
     MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_25/EXP_25_9.pth'
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    
+class BASELINE_graph_V2(BASELINE_HF_V10):
+    EXP_NAME = "EXP_26"
+    LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = EGNNModel
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
     TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
 
 

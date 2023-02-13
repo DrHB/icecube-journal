@@ -32,6 +32,7 @@
 |EXP_24_FT|| same as `EXP_24` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`, and `FT` at `fp32` due to `NaN`s | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V14` |`(1, 100)`|
 |EXP_25|`1.017`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss` and `GraphNet`, the `KNN` grouping is performed using `xyz` and max_events are `196`, the first grouping in dataloder is done using `xyzt`, i am cycling thru training (going thru all batches)| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V1` |`(1, 100)`|
 |EXP_25_FT|`1.017`| same as `EXP_25` but finetuning| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V1_FT` |`(1, 100)`|
+|EXP_26|| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarity` and `EGNNmodel`, the `KNN` grouping is performed using `xyzt` and max_events are `196`, i am using `5` layer, aggregation type `sum`, embedding `dim = 128` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V2` |`cycle`|
 
 
 ```python
