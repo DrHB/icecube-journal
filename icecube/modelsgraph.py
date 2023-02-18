@@ -4,7 +4,7 @@
 __all__ = ['loss_fn_azi', 'loss_fn_zen', 'GLOBAL_POOLINGS', 'MeanPoolingWithMask', 'CombineLossV0',
            'EncoderWithReconstructionLossV0', 'EuclideanDistanceLossG', 'gVonMisesFisher3DLossEcludeLoss',
            'gVonMisesFisher3DLoss', 'gVonMisesFisher3DLossCosineSimularityLoss', 'DynEdgeConv', 'DynEdge', 'DynEdgeV0',
-           'DynEdgeV1', 'EGNNLayer', 'EGNNModel']
+           'DynEdgeV1', 'EGNNLayer', 'EGNNModel', 'EGNNModelV2', 'FeedForward', 'EGNNModelV3', 'EGNNModelV4']
 
 # %% ../nbs/02_modelsgraph.ipynb 1
 import sys
@@ -699,5 +699,293 @@ class EGNNModel(torch.nn.Module):
         out = self.postpool(out) 
         out = self.out(out)  # (batch_size, d) -> (batch_size, 1)
         return out
+    
+class EGNNModelV2(torch.nn.Module):
+    def __init__(
+        self,
+        num_layers=5,
+        emb_dim=128,
+        in_dim=6,
+        activation="relu",
+        norm="layer",
+        aggr="sum",
+        pool="sum",
+        residual=True
+    ):
+        """E(n) Equivariant GNN model 
+        
+        Args:
+            num_layers: (int) - number of message passing layers
+            emb_dim: (int) - hidden dimension
+            in_dim: (int) - initial node feature dimension
+            out_dim: (int) - output number of classes
+            activation: (str) - non-linearity within MLPs (swish/relu)
+            norm: (str) - normalisation layer (layer/batch)
+            aggr: (str) - aggregation function `\oplus` (sum/mean/max)
+            pool: (str) - global pooling function (sum/mean)
+            residual: (bool) - whether to use residual connections
+        """
+        super().__init__()
 
+        # Embedding lookup for initial node features
+        self.emb_in = nn.Linear(in_dim, emb_dim)
+
+        # Stack of GNN layers
+        self.convs = torch.nn.ModuleList()
+        for layer in range(num_layers):
+            self.convs.append(EGNNLayer(emb_dim, activation, norm, aggr))
+
+        # Global pooling/readout function
+        self.pool = {"mean": global_mean_pool, "sum": global_add_pool}[pool]
+
+        # Predictor MLP
+        self.postpool = torch.nn.Sequential(
+            torch.nn.Linear(emb_dim, emb_dim),
+            torch.nn.ReLU()
+        )
+        
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=emb_dim,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+
+        self.residual = residual
+
+    def forward(self, batch):
+        
+        h = self.emb_in(batch.x[:, 3:])  # (n,) -> (n, d)
+        pos = batch.pos  # (n, 3)
+
+        for conv in self.convs:
+            # Message passing layer
+            h_update, pos_update = conv(h, pos, batch.edge_index)
+
+            # Update node features (n, d) -> (n, d)
+            h = h + h_update if self.residual else h_update 
+
+            # Update node coordinates (no residual) (n, 3) -> (n, 3)
+            pos = pos_update
+
+        out = self.pool(h, batch.batch)  # (n, d) -> (batch_size, d)
+        out = self.postpool(out) 
+        out = self.out(out)  # (batch_size, d) -> (batch_size, 1)
+        return out
+
+class FeedForward(nn.Module):
+    def __init__(self, dim, dim_out=None, mult=4):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, dim * mult), nn.GELU(), nn.Linear(dim * mult, dim_out)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+    
+class EGNNModelV3(torch.nn.Module):
+    def __init__(
+        self,
+        num_layers=5,
+        emb_dim=128,
+        in_dim=9,
+        activation="relu",
+        norm="layer",
+        aggr="sum",
+        _global_pooling_schemes=["sum", "mean", "max", "min"],
+        residual=True
+    ):
+        """E(n) Equivariant GNN model 
+        
+        Args:
+            num_layers: (int) - number of message passing layers
+            emb_dim: (int) - hidden dimension
+            in_dim: (int) - initial node feature dimension
+            out_dim: (int) - output number of classes
+            activation: (str) - non-linearity within MLPs (swish/relu)
+            norm: (str) - normalisation layer (layer/batch)
+            aggr: (str) - aggregation function `\oplus` (sum/mean/max)
+            pool: (str) - global pooling function (sum/mean)
+            residual: (bool) - whether to use residual connections
+        """
+        super().__init__()
+
+        # Embedding lookup for initial node features
+        self.emb_in = nn.Linear(in_dim, emb_dim)
+
+        # Stack of GNN layers
+        self.convs = torch.nn.ModuleList()
+        for layer in range(num_layers):
+            self.convs.append(EGNNLayer(emb_dim, activation, norm, aggr))
+
+        # Global pooling/readout function
+
+
+
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=emb_dim * 4,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+
+        self.residual = residual
+        self._global_pooling_schemes = _global_pooling_schemes
+        
+        
+    def _global_pooling(self, x: Tensor, batch: LongTensor) -> Tensor:
+        """Perform global pooling."""
+        assert self._global_pooling_schemes
+        pooled = []
+        for pooling_scheme in self._global_pooling_schemes:
+            pooling_fn = GLOBAL_POOLINGS[pooling_scheme]
+            pooled_x = pooling_fn(x, index=batch, dim=0)
+            if isinstance(pooled_x, tuple) and len(pooled_x) == 2:
+                # `scatter_{min,max}`, which return also an argument, vs.
+                # `scatter_{mean,sum}`
+                pooled_x, _ = pooled_x
+            pooled.append(pooled_x)
+
+        return torch.cat(pooled, dim=1)
+    
+    def forward(self, batch):
+        
+        h = self.emb_in(batch.x)  # (n,) -> (n, d)
+        pos = batch.pos  # (n, 3)
+
+        for conv in self.convs:
+            # Message passing layer
+            h_update, pos_update = conv(h, pos, batch.edge_index)
+
+            # Update node features (n, d) -> (n, d)
+            h = h + h_update if self.residual else h_update 
+
+            # Update node coordinates (no residual) (n, 3) -> (n, 3)
+            pos = pos_update
+
+        out = self._global_pooling(h, batch.batch)  # (n, d) -> (batch_size, d)
+
+        out = self.out(out)  # (batch_size, d) -> (batch_size, 1)
+        return out
+    
+class EGNNModelV4(torch.nn.Module):
+    def __init__(
+        self,
+        num_layers=5,
+        emb_dim=128,
+        in_dim=9,
+        activation="relu",
+        norm="layer",
+        aggr="sum",
+        pool="sum",
+        residual=True
+    ):
+        """E(n) Equivariant GNN model 
+        
+        Args:
+            num_layers: (int) - number of message passing layers
+            emb_dim: (int) - hidden dimension
+            in_dim: (int) - initial node feature dimension
+            out_dim: (int) - output number of classes
+            activation: (str) - non-linearity within MLPs (swish/relu)
+            norm: (str) - normalisation layer (layer/batch)
+            aggr: (str) - aggregation function `\oplus` (sum/mean/max)
+            pool: (str) - global pooling function (sum/mean)
+            residual: (bool) - whether to use residual connections
+        """
+        super().__init__()
+
+        # Embedding lookup for initial node features
+        self.emb_in = nn.Linear(in_dim + 14, emb_dim)
+        self._add_global_variables_after_pooling = False
+
+        # Stack of GNN layers
+        self.convs = torch.nn.ModuleList()
+        for layer in range(num_layers):
+            self.convs.append(EGNNLayer(emb_dim, activation, norm, aggr))
+
+        # Global pooling/readout function
+        self.pool = {"mean": global_mean_pool, "sum": global_add_pool}[pool]
+
+        # Predictor MLP
+        self.postpool = torch.nn.Sequential(
+            torch.nn.Linear(emb_dim, emb_dim),
+            torch.nn.ReLU()
+        )
+        
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=emb_dim,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+
+        self.residual = residual
+        
+    def _calculate_global_variables(
+        self,
+        x: Tensor,
+        edge_index: LongTensor,
+        batch: LongTensor,
+        *additional_attributes: Tensor,
+    ) -> Tensor:
+        """Calculate global variables."""
+        # Calculate homophily (scalar variables)
+        h_x, h_y, h_z, h_t = calculate_xyzt_homophily(x, edge_index, batch)
+
+        # Calculate mean features
+        global_means = scatter_mean(x, batch, dim=0)
+
+        # Add global variables
+        global_variables = torch.cat(
+            [
+                global_means,
+                h_x,
+                h_y,
+                h_z,
+                h_t,
+            ]
+            + [attr.unsqueeze(dim=1) for attr in additional_attributes],
+            dim=1,
+        )
+
+        return global_variables
+
+    def forward(self, data):
+        x, edge_index, batch, pos = data.x, data.edge_index, data.batch, data.pos
+        global_variables = self._calculate_global_variables(
+            x,
+            edge_index,
+            batch,
+            torch.log10(data.n_pulses),
+        )
+        #print(global_variables.shape)
+       # Distribute global variables out to each node
+        if not self._add_global_variables_after_pooling:
+            distribute = (
+                batch.unsqueeze(dim=1) == torch.unique(batch).unsqueeze(dim=0)
+            ).type(torch.float)
+
+            global_variables_distributed = torch.sum(
+                distribute.unsqueeze(dim=2) * global_variables.unsqueeze(dim=0),
+                dim=1,
+            )
+
+            x = torch.cat((x, global_variables_distributed), dim=1)
+            
+        h = self.emb_in(x)  # (n,) -> (n, d)
+
+        for conv in self.convs:
+            # Message passing layer
+            h_update, pos_update = conv(h, pos, edge_index)
+
+            # Update node features (n, d) -> (n, d)
+            h = h + h_update if self.residual else h_update 
+
+            # Update node coordinates (no residual) (n, 3) -> (n, 3)
+            pos = pos_update
+
+        out = self.pool(h, batch)  # (n, d) -> (batch_size, d)
+        out = self.postpool(out) 
+        out = self.out(out)  # (batch_size, d) -> (batch_size, 1)
+        return out
+    
 

@@ -6,11 +6,12 @@ __all__ = ['DIST_KERNELS', 'EuclideanDistanceLossG', 'VonMisesFisher3DLossCosine
            'Adjustoutput', 'PoolingWithMask', 'MeanPoolingWithMask', 'FeedForward', 'IceCubeModelEncoderV0',
            'IceCubeModelEncoderV1', 'IceCubeModelEncoderV1CombinePool', 'always', 'l2norm', 'TokenEmbedding',
            'IceCubeModelEncoderSensorEmbeddinng', 'IceCubeModelEncoderSensorEmbeddinngV1', 'TokenEmbeddingV2',
-           'IceCubeModelEncoderSensorEmbeddinngV2', 'IceCubeModelEncoderSensorEmbeddinngV3', 'IceCubeModelEncoderV2',
-           'EncoderWithDirectionReconstruction', 'EncoderWithDirectionReconstructionV1',
-           'EncoderWithDirectionReconstructionV2', 'EncoderWithDirectionReconstructionV3',
-           'EncoderWithDirectionReconstructionV4', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
-           'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked']
+           'IceCubeModelEncoderSensorEmbeddinngV2', 'IceCubeModelEncoderSensorEmbeddinngV3',
+           'IceCubeModelEncoderSensorEmbeddinngV4', 'IceCubeModelEncoderV2', 'EncoderWithDirectionReconstruction',
+           'EncoderWithDirectionReconstructionV1', 'EncoderWithDirectionReconstructionV2',
+           'EncoderWithDirectionReconstructionV3', 'EncoderWithDirectionReconstructionV4', 'exists', 'default',
+           'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT',
+           'IceCubeModelEncoderMATMasked']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -392,6 +393,51 @@ class IceCubeModelEncoderSensorEmbeddinngV3(nn.Module):
         x = self.pool(x, mask)
         x = self.head(x)
         s = self.sigmout(x)
+        return x
+    
+class IceCubeModelEncoderSensorEmbeddinngV4(nn.Module):
+    def __init__(self, dim=128, in_features=9):
+        super().__init__()
+        self.token_emb = TokenEmbeddingV2(dim, num_tokens=5168)
+        self.post_norma = nn.LayerNorm(dim)
+        self.token_emb.init_()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_in=in_features + dim,
+            dim_out=256,
+            max_seq_len=480,
+            post_emb_norm = True,
+            attn_layers=Encoder(dim=256, 
+                                depth=8, 
+                                heads=8, 
+                                ff_glu = True,
+                                rotary_pos_emb = True),
+        )
+
+        self.pool_mean = PoolingWithMask("mean")
+        self.pool_max = PoolingWithMask("max")
+        
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=256 * 2,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+        
+        self.apply(self._init_weights)
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def forward(self, batch):
+        x, mask, sensor_id = batch["event"], batch["mask"], batch["sensor_id"]
+        embed = self.token_emb(sensor_id)
+        x = torch.cat([x, embed], dim=-1)
+        x = self.encoder(x, mask=mask)
+        x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask)], dim=1)
+        x = self.out(x)
         return x
 
 
