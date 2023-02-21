@@ -13,6 +13,7 @@ from icecube.dataset import (
     HuggingFaceDatasetV10,
     HuggingFaceDatasetV11,
     HuggingFaceDatasetV12,
+    HuggingFaceDatasetV13,
     HuggingFaceDatasetGraphV0,
     HuggingFaceDatasetGraphV1,
 )
@@ -58,6 +59,7 @@ from icecube.modelsgraph import (
     EGNNModelV2,
     EGNNModelV3,
     EGNNModelV4,
+    EGNNModelV6,
     gVonMisesFisher3DLossEcludeLoss,
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
@@ -414,6 +416,20 @@ class BASELINE_HF_V15_FT(BASELINE_HF_V15):
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV4
     BATCH_SIZE = 768
     
+    
+class BASELINE_HF_V15_FT_2(BASELINE_HF_V15_FT):
+    EXP_NAME = "EXP_29_FT_2"
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_29_FT/EXP_29_FT_5.pth'
+    LR = (1e-4 + 1e-3)/2
+    LOSS_FUNC = VonMisesFisher3DLossEcludeLossCosine
+    FIT_FUNC = fit_shufllef32
+    EPOCHS = 6
+    TRN_DATASET = HuggingFaceDatasetV13
+    VAL_DATASET = HuggingFaceDatasetV13
+    COLLAT_FN = collate_fn_v1
+    MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV4
+    BATCH_SIZE = 512
+    
 class BASELINE_graph_V5(BASELINE_HF_V10):
     EXP_NAME = "EXP_30"
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
@@ -425,6 +441,21 @@ class BASELINE_graph_V5(BASELINE_HF_V10):
     VAL_DATASET = GraphDasetV0
     TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
     EPOCHS = 12
+    
+class BASELINE_graph_V6(BASELINE_graph_V5):
+    EXP_NAME = "EXP_31"
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = EGNNModelV6
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    EPOCHS = 12
+    DEVICE = 'cuda:1'
+    BATCH_SIZE = 1024
+    
     
     
     

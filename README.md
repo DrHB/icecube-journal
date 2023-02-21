@@ -35,10 +35,12 @@
 |EXP_25_FT|`0.999`| same as `EXP_25` but finetuning| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V1_FT` |`(1, 100)`|
 |EXP_26|`1.037`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarity` and `EGNNmodel`, the `KNN` grouping is performed using `xyzt` with `8` neighbors,  and max_events are `196`, i am using `5` layer, aggregation type `sum`, embedding `dim = 128` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V2` |`cycle`|
 |EXP_27|`1.535`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarity` and `EGNNmodelV1`, the `KNN` grouping is performed using `xyzt` with `8` neighbors,  and max_events are `196`, i am using `5` layer, aggregation type `sum`, embedding `dim = 128`, in `EXP_25` i feed coodinates as embedding, now i will only feed `6` features and keep coordinate seperated, score is really bad | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V3` |`cycle`|
-|EXP_28|| same as `EXP_26` but usng `mean`, `max`, `sum`, `min` pooling scheme | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V4` |`cycle`|
-|EXP_29|`1.019`| same as `EXP_05` (`sensor_id`, has there own embeddings), feature input size is `9`,  but using `masked` `mean` and `max` pooliing, transformer encoder `8` layers, with `rotatry_emb` and `ff_glu`, and `post_emb_normalazation`, `attn` dim `256` and loss_func `VonMisesFisher3DLoss`  and `VonMisesFisher3DLossEcludeLossCosine` and `fp32` `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V15_FT` |`cycle`|
-|EXP_29_FT|`1.019`| same as `EXP_29` but with max_len `160`, and   |`cycle`|
+|EXP_28|`1.050`| same as `EXP_26` but usng `mean`, `max`, `sum`, `min` pooling scheme | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V4` |`cycle`|
+|EXP_29|`1.019`| same as `EXP_05` (`sensor_id`, has there own embeddings), feature input size is `9`,  but using `masked` `mean` and `max` pooliing, transformer encoder `8` layers, with `rotatry_emb` and `ff_glu`, and `post_emb_normalazation`, `attn` dim `256` and loss_func `VonMisesFisher3DLoss`  and `VonMisesFisher3DLossEcludeLossCosine` and `fp32` |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V15` |`cycle`|
+|EXP_29_FT|`1.0006`| same as `EXP_29` but with max_len `160` and `fp32`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V15_FT` |`cycle`|
+|EXP_29_FT_2|`1.002`| same as `EXP_29_FT` but with max_len `196` and `fp32`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V15_FT_2` |`cycle`|
 |EXP_30|`1.0379`| same as `EXP_26`,  added hemophilty as input features| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V5` |`cycle`|
+|EXP_31|| same as `EXP_30`,  added first layer of `graphnet` as embeding layer and then standarted `EGNNModel`, after first layer we will have `279` embedding features that will go to ENGG along with positions.| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V6` |`cycle`|
 
 
 ```python
