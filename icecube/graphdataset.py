@@ -2,7 +2,8 @@
 
 # %% auto 0
 __all__ = ['normalize', 'ice_transparency', 'prepare_sensors', 'convert_to_3d', 'event_filtering_v1', 'get_distance_matrix',
-           'get_distance_matrix_for_indices', 'get_distance_matrix_from_csv', 'GraphDasetV0']
+           'get_distance_matrix_for_indices', 'get_distance_matrix_from_csv', 'GraphDasetV0', 'GraphDasetV1',
+           'GraphDasetV3']
 
 # %% ../nbs/00_graphdataset.ipynb 1
 from pathlib import Path
@@ -124,6 +125,156 @@ class GraphDasetV0(gDataset):
         self,
         ds,
         max_events=196,
+        transform=None,
+        pre_transform= KNNGraphBuilder(nb_nearest_neighbours=8, columns=[0, 1, 2, 3]),
+        pre_filter=None,
+    ):
+        super().__init__(transform, pre_transform, pre_filter)
+        self.ds = ds
+        self.max_events = max_events
+        self.f_scattering, self.f_absorption = ice_transparency()
+        self.sensor_data = prepare_sensors()
+
+
+    def len(self):
+        return len(self.ds)
+
+    def get(self, idx):
+        item = self.ds[idx]
+
+        event = pd.DataFrame(item)[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+                "sensor_id"
+            ]
+        ].astype(np.float32)
+        t = (event["time"].values - 1.0e04) / 3.0e4
+        event["time"] /= event["time"].max()
+
+        if event.shape[0] > self.max_events:
+            event = event_filtering_v1(event, max_pulse_count=self.max_events)
+
+        event[["x", "y", "z"]] /= 500
+        event["charge"] = np.log10(event["charge"]) / 3.0
+        event["auxiliary"] -= 0.5
+
+        event["time"] = t[: self.max_events]
+        event["scattering"] = self.f_scattering(event["z"].values).reshape(-1)
+        event["absorption"] = self.f_absorption(event["z"].values).reshape(-1)
+        event['qe'] = self.sensor_data.loc[event['sensor_id'].values].values.reshape(-1)
+        event = torch.tensor(event[
+            [
+                "x",
+                "y",
+                "z",
+                "time",
+                "charge",
+                "auxiliary",
+                "qe",
+                "scattering",
+                "absorption",
+            ]
+        ].values, dtype=torch.float32)
+        
+        label = torch.tensor(convert_to_3d(item["azimuth"], item["zenith"]), dtype=torch.float32)
+        #print(item["azimuth"], item["zenith"])    
+    
+        data = Data(x=deepcopy(event), 
+                    pos= event[:, :3],
+                    n_pulses=torch.tensor(event.shape[0],
+                                          dtype=torch.int32), 
+                    y = label)
+        
+        return data
+    
+    
+class GraphDasetV1(gDataset):
+    "same as GraphDasetV0 but with eventid"
+    def __init__(
+        self,
+        ds,
+        max_events=196,
+        transform=None,
+        pre_transform= KNNGraphBuilder(nb_nearest_neighbours=9, columns=[0, 1, 2, 3]),
+        pre_filter=None,
+    ):
+        super().__init__(transform, pre_transform, pre_filter)
+        self.ds = ds
+        self.max_events = max_events
+        self.f_scattering, self.f_absorption = ice_transparency()
+        self.sensor_data = prepare_sensors()
+
+
+    def len(self):
+        return len(self.ds)
+
+    def get(self, idx):
+        item = self.ds[idx]
+
+        event = pd.DataFrame(item)[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+                "sensor_id"
+            ]
+        ].astype(np.float32)
+        t = (event["time"].values - 1.0e04) / 3.0e4
+        event["time"] /= event["time"].max()
+
+        if event.shape[0] > self.max_events:
+            event = event_filtering_v1(event, max_pulse_count=self.max_events)
+
+        event[["x", "y", "z"]] /= 500
+        event["charge"] = np.log10(event["charge"]) / 3.0
+        event["auxiliary"] -= 0.5
+
+        event["time"] = t[: self.max_events]
+        event["scattering"] = self.f_scattering(event["z"].values).reshape(-1)
+        event["absorption"] = self.f_absorption(event["z"].values).reshape(-1)
+        event['qe'] = self.sensor_data.loc[event['sensor_id'].values].values.reshape(-1)
+        event = torch.tensor(event[
+            [
+                "x",
+                "y",
+                "z",
+                "time",
+                "charge",
+                "auxiliary",
+                "qe",
+                "scattering",
+                "absorption",
+                "sensor_id"
+            ]
+        ].values, dtype=torch.float32)
+        
+        label = torch.tensor(convert_to_3d(item["azimuth"], item["zenith"]), dtype=torch.float32)
+        #print(item["azimuth"], item["zenith"])    
+    
+        data = Data(x=deepcopy(event[:, :-1]), 
+                    pos= event[:, :3],
+                    n_pulses=torch.tensor(event.shape[0],
+                                          dtype=torch.int32), 
+                    sensor_id = event[:, -1].int(),
+                    y = label)
+        
+        return data
+    
+    
+class GraphDasetV3(gDataset):
+    'same as V0 but with 128 events'
+    def __init__(
+        self,
+        ds,
+        max_events=128,
         transform=None,
         pre_transform= KNNGraphBuilder(nb_nearest_neighbours=8, columns=[0, 1, 2, 3]),
         pre_filter=None,

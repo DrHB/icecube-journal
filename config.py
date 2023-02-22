@@ -60,11 +60,14 @@ from icecube.modelsgraph import (
     EGNNModelV3,
     EGNNModelV4,
     EGNNModelV6,
+    EGNNModelV7,
+    EGNNModelV8,
+    GraphxTransformerV0,
     gVonMisesFisher3DLossEcludeLoss,
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
 )
-from icecube.graphdataset import GraphDasetV0
+from icecube.graphdataset import GraphDasetV0, GraphDasetV1, GraphDasetV3
 
 from icecube.utils import (
     fit_shuflle,
@@ -456,6 +459,46 @@ class BASELINE_graph_V6(BASELINE_graph_V5):
     DEVICE = 'cuda:1'
     BATCH_SIZE = 1024
     
+class BASELINE_graph_V7(BASELINE_HF_V10):
+    EXP_NAME = "EXP_32"
+    LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = EGNNModelV7
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV1
+    VAL_DATASET = GraphDasetV1
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    EPOCHS = 12
+    BATCH_SIZE = 1024 
+    
+    
+class BASELINE_graph_V8(BASELINE_graph_V5):
+    EXP_NAME = "EXP_33"
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = GraphxTransformerV0
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV3
+    VAL_DATASET = GraphDasetV3
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    EPOCHS = 12
+    DEVICE = 'cuda:1'
+    BATCH_SIZE = 1024
+    
+class BASELINE_graph_V9(BASELINE_graph_V5):
+    EXP_NAME = "EXP_34"
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = EGNNModelV8
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    EPOCHS = 12
+    DEVICE = 'cuda:0'
     
     
     

@@ -4,8 +4,9 @@
 __all__ = ['loss_fn_azi', 'loss_fn_zen', 'GLOBAL_POOLINGS', 'MeanPoolingWithMask', 'CombineLossV0',
            'EncoderWithReconstructionLossV0', 'EuclideanDistanceLossG', 'gVonMisesFisher3DLossEcludeLoss',
            'gVonMisesFisher3DLoss', 'gVonMisesFisher3DLossCosineSimularityLoss', 'DynEdgeConv', 'DynEdge',
-           'DynEdgeFEXTRACTRO', 'DynEdgeV0', 'DynEdgeV1', 'EGNNLayer', 'EGNNModel', 'EGNNModelV2', 'FeedForward',
-           'EGNNModelV3', 'EGNNModelV4', 'EGNNModelV5', 'EGNNModelV6']
+           'DynEdgeFEXTRACTRO', 'DynEdgeV0', 'DynEdgeV1', 'EGNNLayer', 'EGNNLayerKNN', 'EGNNModel', 'EGNNModelV2',
+           'FeedForward', 'EGNNModelV3', 'EGNNModelV4', 'EGNNModelV5', 'EGNNModelV6', 'TokenEmbeddingV2', 'EGNNModelV7',
+           'EGNNModelV8', 'PoolingWithMask', 'EncoderWithDirectionReconstructionX', 'GraphxTransformerV0']
 
 # %% ../nbs/02_modelsgraph.ipynb 1
 import sys
@@ -33,6 +34,8 @@ from torch import Tensor, LongTensor
 from torch_geometric.nn import MessagePassing, global_add_pool, global_mean_pool
 from torch.nn import Linear, ReLU, SiLU, Sequential
 from torch_scatter import scatter
+import numpy as np
+import torch.nn.functional as F
 
 
 # %% ../nbs/02_modelsgraph.ipynb 4
@@ -963,6 +966,95 @@ class EGNNLayer(MessagePassing):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(emb_dim={self.emb_dim}, aggr={self.aggr})"
     
+class EGNNLayerKNN(MessagePassing):
+    def __init__(self, emb_dim, activation="relu", norm="layer", aggr="add"):
+        """E(n) Equivariant GNN Layer
+        Paper: E(n) Equivariant Graph Neural Networks, Satorras et al.
+        
+        Args:
+            emb_dim: (int) - hidden dimension `d`
+            activation: (str) - non-linearity within MLPs (swish/relu)
+            norm: (str) - normalisation layer (layer/batch)
+            aggr: (str) - aggregation function `\oplus` (sum/mean/max)
+        """
+        # Set the aggregation function
+        super().__init__(aggr=aggr)
+
+        self.emb_dim = emb_dim
+        self.activation = {"swish": SiLU(), "relu": ReLU()}[activation]
+        self.norm = {"layer": torch.nn.LayerNorm, "batch": torch.nn.BatchNorm1d}[norm]
+
+        # MLP `\psi_h` for computing messages `m_ij`
+        self.mlp_msg = Sequential(
+            Linear(2 * emb_dim + 1, emb_dim),
+            self.norm(emb_dim),
+            self.activation,
+            Linear(emb_dim, emb_dim),
+            self.norm(emb_dim),
+            self.activation,
+        )
+        # MLP `\psi_x` for computing messages `\overrightarrow{m}_ij`
+        self.mlp_pos = Sequential(
+            Linear(emb_dim, emb_dim), self.norm(emb_dim), self.activation, Linear(emb_dim, 1)
+        )
+        # MLP `\phi` for computing updated node features `h_i^{l+1}`
+        self.mlp_upd = Sequential(
+            Linear(2 * emb_dim, emb_dim),
+            self.norm(emb_dim),
+            self.activation,
+            Linear(emb_dim, emb_dim),
+            self.norm(emb_dim),
+            self.activation,
+        )
+
+    def forward(self, h, pos, edge_index, batch):
+        """
+        Args:
+            h: (n, d) - initial node features
+            pos: (n, 3) - initial node coordinates
+            edge_index: (e, 2) - pairs of edges (i, j)
+        Returns:
+            out: [(n, d),(n,3)] - updated node features
+        """
+        out = self.propagate(edge_index, h=h, pos=pos)
+        dev = pos.device
+
+        # Recompute adjacency
+        edge_index = knn_graph(
+            x=out[0][:, slice(0, 3)],
+            k=9,
+            batch=batch,
+        ).to(dev)
+
+        return (*out, edge_index)
+
+    def message(self, h_i, h_j, pos_i, pos_j):
+        # Compute messages
+        pos_diff = pos_i - pos_j
+        dists = torch.norm(pos_diff, dim=-1).unsqueeze(1)
+        msg = torch.cat([h_i, h_j, dists], dim=-1)
+        msg = self.mlp_msg(msg)
+        # Scale magnitude of displacement vector
+        pos_diff = pos_diff * self.mlp_pos(msg)  # torch.clamp(updates, min=-100, max=100)
+        return msg, pos_diff
+
+    def aggregate(self, inputs, index):
+        msgs, pos_diffs = inputs
+        # Aggregate messages
+        msg_aggr = scatter(msgs, index, dim=self.node_dim, reduce=self.aggr)
+        # Aggregate displacement vectors
+        pos_aggr = scatter(pos_diffs, index, dim=self.node_dim, reduce="mean")
+        return msg_aggr, pos_aggr
+
+    def update(self, aggr_out, h, pos):
+        msg_aggr, pos_aggr = aggr_out
+        upd_out = self.mlp_upd(torch.cat([h, msg_aggr], dim=-1))
+        upd_pos = pos + pos_aggr
+        return upd_out, upd_pos
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(emb_dim={self.emb_dim}, aggr={self.aggr})"
+    
     
 class EGNNModel(torch.nn.Module):
     def __init__(
@@ -1522,4 +1614,261 @@ class EGNNModelV6(torch.nn.Module):
         out = self.out(out)  # (batch_size, d) -> (batch_size, 1)
         return out
     
+class TokenEmbeddingV2(nn.Module):
+    def __init__(self, dim, num_tokens, l2norm_embed=False):
+        super().__init__()
+        self.l2norm_embed = l2norm_embed
+        self.emb = nn.Embedding(num_tokens, dim)
+
+    def forward(self, x):
+        token_emb = self.emb(x)
+        return l2norm(token_emb) if self.l2norm_embed else token_emb
+
+    def init_(self):
+        nn.init.kaiming_normal_(self.emb.weight)
+    
+class EGNNModelV7(torch.nn.Module):
+    def __init__(
+        self,
+        num_layers=5,
+        emb_dim=128,
+        in_dim=6,
+        activation="swish",
+        norm="layer",
+        aggr="sum",
+        pool="sum",
+        residual=True
+    ):
+        """E(n) Equivariant GNN model 
+        
+        added embedding for events
+        
+        Args:
+            num_layers: (int) - number of message passing layers
+            emb_dim: (int) - hidden dimension
+            in_dim: (int) - initial node feature dimension
+            out_dim: (int) - output number of classes
+            activation: (str) - non-linearity within MLPs (swish/relu)
+            norm: (str) - normalisation layer (layer/batch)
+            aggr: (str) - aggregation function `\oplus` (sum/mean/max)
+            pool: (str) - global pooling function (sum/mean)
+            residual: (bool) - whether to use residual connections
+        """
+        super().__init__()
+
+        # Embedding lookup for initial node features
+        self.emb_in = nn.Linear(in_dim, emb_dim)
+        self.sensor_id = TokenEmbeddingV2((emb_dim)//4, num_tokens=5161)
+        emb_dim = emb_dim + (emb_dim)//4
+
+        # Stack of GNN layers
+        self.convs = torch.nn.ModuleList()
+        for layer in range(num_layers):
+            self.convs.append(EGNNLayer(emb_dim, activation, norm, aggr))
+
+        # Global pooling/readout function
+        self.pool = {"mean": global_mean_pool, "sum": global_add_pool}[pool]
+
+        # Predictor MLP
+        self.postpool = torch.nn.Sequential(
+            torch.nn.Linear(emb_dim, emb_dim),
+            torch.nn.ReLU()
+        )
+        
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=emb_dim,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+
+        self.residual = residual
+
+    def forward(self, batch):
+        
+        h = self.emb_in(batch.x[:, 3:])  # (n,) -> (n, d)
+        event = self.sensor_id(batch.sensor_id)
+        h = torch.cat([h, event], dim=1)
+        pos = batch.pos  # (n, 3)
+
+        for conv in self.convs:
+            # Message passing layer
+            h_update, pos_update = conv(h, pos, batch.edge_index)
+
+            # Update node features (n, d) -> (n, d)
+            h = h + h_update if self.residual else h_update 
+
+            # Update node coordinates (no residual) (n, 3) -> (n, 3)
+            pos = pos_update
+
+        out = self.pool(h, batch.batch)  # (n, d) -> (batch_size, d)
+        out = self.postpool(out) 
+        out = self.out(out)  # (batch_size, d) -> (batch_size, 1)
+        return out
+    
+class EGNNModelV8(torch.nn.Module):
+    def __init__(
+        self,
+        num_layers=5,
+        emb_dim=128,
+        in_dim=9,
+        activation="relu",
+        norm="layer",
+        aggr="sum",
+        pool="sum",
+        residual=True
+    ):
+        """E(n) Equivariant GNN model 
+        
+        Args:
+            num_layers: (int) - number of message passing layers
+            emb_dim: (int) - hidden dimension
+            in_dim: (int) - initial node feature dimension
+            out_dim: (int) - output number of classes
+            activation: (str) - non-linearity within MLPs (swish/relu)
+            norm: (str) - normalisation layer (layer/batch)
+            aggr: (str) - aggregation function `\oplus` (sum/mean/max)
+            pool: (str) - global pooling function (sum/mean)
+            residual: (bool) - whether to use residual connections
+        """
+        super().__init__()
+
+        # Embedding lookup for initial node features
+        self.emb_in = nn.Linear(in_dim, emb_dim)
+
+        # Stack of GNN layers
+        self.convs = torch.nn.ModuleList()
+        for layer in range(num_layers):
+            self.convs.append(EGNNLayerKNN(emb_dim, activation, norm, aggr))
+
+        # Global pooling/readout function
+        self.pool = {"mean": global_mean_pool, "sum": global_add_pool}[pool]
+
+        # Predictor MLP
+        self.postpool = torch.nn.Sequential(
+            torch.nn.Linear(emb_dim, emb_dim),
+            torch.nn.ReLU()
+        )
+        
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=emb_dim,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+
+        self.residual = residual
+
+    def forward(self, batch):
+        
+        h = self.emb_in(batch.x)  # (n,) -> (n, d)
+        pos = batch.pos  # (n, 3)
+        edge_index = batch.edge_index
+        for conv in self.convs:
+            # Message passing layer
+            h_update, pos_update, edge_index = conv(h, pos, edge_index, batch.batch)
+
+            # Update node features (n, d) -> (n, d)
+            h = h + h_update if self.residual else h_update 
+
+            # Update node coordinates (no residual) (n, 3) -> (n, 3)
+            pos = pos_update
+
+        out = self.pool(h, batch.batch)  # (n, d) -> (batch_size, d)
+        out = self.postpool(out) 
+        out = self.out(out)  # (batch_size, d) -> (batch_size, 1)
+        return out
+    
+    
+    
+from torch_geometric.utils import to_dense_batch
+class PoolingWithMask(nn.Module):
+    def __init__(self, pool_type):
+        super().__init__()
+        self.pool_type = pool_type
+
+    def forward(self, x, mask):
+        # Multiply the mask with the input tensor to zero out the padded values
+        x = x * mask.unsqueeze(-1)
+
+        if self.pool_type == "mean":
+            # Sum the values along the sequence dimension
+            x = torch.sum(x, dim=1)
+
+            # Divide the sum by the number of non-padded values (i.e. the sum of the mask)
+            x = x / torch.sum(mask, dim=1, keepdim=True)
+        elif self.pool_type == "max":
+            # Find the maximum value along the sequence dimension
+            x, _ = torch.max(x, dim=1)
+        elif self.pool_type == "min":
+            # Find the minimum value along the sequence dimension
+            x, _ = torch.min(x, dim=1)
+        else:
+            raise ValueError("Invalid pool_type. Choose from ['mean', 'max', 'min']")
+
+        return x
+
+
+
+class EncoderWithDirectionReconstructionX(nn.Module):
+    def __init__(self, dim_in=151, dim_out=196, max_seq_len=150):
+        super().__init__()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_in=dim_in,
+            dim_out=dim_out,
+            max_seq_len=max_seq_len,
+            post_emb_norm = True,
+            attn_layers=Encoder(dim=dim_out,
+                                depth=6,
+                                heads=8,
+                                ff_glu = True,
+                                rotary_pos_emb = True),
+        )
+
+        self.pool_mean = PoolingWithMask("mean")
+        self.pool_max = PoolingWithMask("max")
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=dim_out * 2,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+        
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
+    def forward(self, batch):
+        x, mask = batch["event"], batch["mask"]
+        x = self.encoder(x, mask=mask)
+        x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask)], dim=1)
+        return self.out(x)
+    
+    
+class GraphxTransformerV0(torch.nn.Module):
+    def __init__(
+        
+        self,
+        nb_inputs=9
+    ):
+        super().__init__()
+
+        # Embedding lookup for initial node features
+        self.emb_in = DynEdgeFEXTRACTRO(nb_inputs=nb_inputs,
+            nb_neighbours=8,
+            global_pooling_schemes=["min", "max", "mean", "sum"],
+            features_subset=slice(0, 4),
+            dynedge_layer_sizes=[(128, 128)])
+        
+        self.transformer = EncoderWithDirectionReconstructionX()
+
+    def forward(self, data):
+        pos = data.pos
+        h, _, batch = self.emb_in(data)  # (n,) -> (n, d)
+        h, mask = to_dense_batch(h, batch)
+        h = self.transformer({"event": h, "mask": mask})
+        return h
 
