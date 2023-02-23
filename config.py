@@ -514,6 +514,12 @@ class BASELINE_graph_V9(BASELINE_graph_V5):
     EPOCHS = 12
     DEVICE = 'cuda:0'
     
+class BASELINE_graph_V9_FT(BASELINE_graph_V9):
+    EXP_NAME = "EXP_34_FT"
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_34/EXP_34_11.pth'
+    LR = 1e-4
+    EPOCHS = 6
+    LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
     
     
     

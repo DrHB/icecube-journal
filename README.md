@@ -45,6 +45,7 @@
 |EXP_33|`1.010`| Here I am using embeding layer from `garpnet`, `graphnet` module calculates first feature based on hemophility and then concat them and passes thru `garph` convolution. This is my embedding layer. After this i just feed to standart transfomer with `6` ecnoder `8` heads. pooling is performed on `mask` with `mean` and `max` concatenated, `ff_glue` , and `rotary_pos_emb` , `max_len = 128` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V8` |`cycle`|
 |EXP_33_FT|| same as EXP_33 but finetuning,  `max_len = 196` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V8_FT` |`cycle`|
 |EXP_34|`1.025`| same as `EXP_26` but i modified `EGNNModel`, every forward pass thru convolution we will try to use `KNN` to rearange edges based on `xyz` (very similar what `dynnet` does | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V9` |`cycle`|
+|EXP_34_FT|| same as `EXP_34` but FT using `gVonMisesFisher3DLossCosineSimularityLoss` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V9` |`cycle`|
 
 ```python
 #embeding dimension changed from 150 to 196 for transformer ecnoder
