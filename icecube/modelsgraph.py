@@ -1809,7 +1809,7 @@ class PoolingWithMask(nn.Module):
 
 
 class EncoderWithDirectionReconstructionX(nn.Module):
-    def __init__(self, dim_in=151, dim_out=196, max_seq_len=150):
+    def __init__(self, dim_in=151, dim_out=196, max_seq_len=500):
         super().__init__()
         self.encoder = ContinuousTransformerWrapper(
             dim_in=dim_in,
