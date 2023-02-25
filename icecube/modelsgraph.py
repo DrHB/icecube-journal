@@ -7,11 +7,12 @@ __all__ = ['loss_fn_azi', 'loss_fn_zen', 'GLOBAL_POOLINGS', 'MeanPoolingWithMask
            'DynEdgeFEXTRACTRO', 'DynEdgeV0', 'DynEdgeV1', 'EGNNLayer', 'EGNNLayerKNN', 'EGNNModel', 'EGNNModelV2',
            'FeedForward', 'EGNNModelV3', 'EGNNModelV4', 'EGNNModelV5', 'EGNNModelV6', 'TokenEmbeddingV2', 'EGNNModelV7',
            'EGNNModelV8', 'EGNNModelV9', 'PoolingWithMask', 'EncoderWithDirectionReconstructionX',
-           'GraphxTransformerV0']
+           'GraphxTransformerV0', 'GraphxTransformerV1']
 
 # %% ../nbs/02_modelsgraph.ipynb 1
 import sys
 sys.path.append('/opt/slh/archive/software/graphnet/src')
+sys.path.append('/opt/slh/icecube/')
 import torch
 from x_transformers import ContinuousTransformerWrapper, Encoder, Decoder
 from torch import nn
@@ -37,6 +38,7 @@ from torch.nn import Linear, ReLU, SiLU, Sequential
 from torch_scatter import scatter
 import numpy as np
 import torch.nn.functional as F
+from .graphdataset import add_features_to_batch
 
 
 # %% ../nbs/02_modelsgraph.ipynb 4
@@ -1806,7 +1808,7 @@ class EGNNModelV9(torch.nn.Module):
         super().__init__()
 
         # Embedding lookup for initial node features
-        self.emb_in = nn.Linear(in_dim, emb_dim)
+        self.emb_in = nn.Linear(in_dim+2, emb_dim)
 
         # Stack of GNN layers
         self.convs = torch.nn.ModuleList()
@@ -1831,7 +1833,7 @@ class EGNNModelV9(torch.nn.Module):
         self.residual = residual
 
     def forward(self, batch):
-        
+        batch.x = add_features_to_batch(batch)
         h = self.emb_in(batch.x)  # (n,) -> (n, d)
         pos = batch.pos  # (n, 3)
         dev = pos.device
@@ -1949,6 +1951,30 @@ class GraphxTransformerV0(torch.nn.Module):
 
     def forward(self, data):
         pos = data.pos
+        h, _, batch = self.emb_in(data)  # (n,) -> (n, d)
+        h, mask = to_dense_batch(h, batch)
+        h = self.transformer({"event": h, "mask": mask})
+        return h
+    
+class GraphxTransformerV1(torch.nn.Module):
+    def __init__(
+        
+        self,
+        nb_inputs=11
+    ):
+        super().__init__()
+
+        # Embedding lookup for initial node features
+        self.emb_in = DynEdgeFEXTRACTRO(nb_inputs=nb_inputs,
+            nb_neighbours=8,
+            global_pooling_schemes=["min", "max", "mean", "sum"],
+            features_subset=slice(0, 4),
+            dynedge_layer_sizes=[(128, 128)])
+        
+        self.transformer = EncoderWithDirectionReconstructionX(dim_in=155)
+
+    def forward(self, data):
+        data.x = add_features_to_batch(data)
         h, _, batch = self.emb_in(data)  # (n,) -> (n, d)
         h, mask = to_dense_batch(h, batch)
         h = self.transformer({"event": h, "mask": mask})

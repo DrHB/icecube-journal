@@ -64,6 +64,7 @@ from icecube.modelsgraph import (
     EGNNModelV8,
     EGNNModelV9,
     GraphxTransformerV0,
+    GraphxTransformerV1,
     gVonMisesFisher3DLossEcludeLoss,
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
@@ -535,6 +536,23 @@ class BASELINE_graph_V10(BASELINE_graph_V5):
     TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
     EPOCHS = 12
     DEVICE = 'cuda:0'
+    
+class BASELINE_graph_V11(BASELINE_graph_V5):
+    EXP_NAME = "EXP_36"
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = GraphxTransformerV1
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV3
+    VAL_DATASET = GraphDasetV3
+    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    EPOCHS = 12
+    DEVICE = 'cuda:1'
+    BATCH_SIZE = 1024
+    
+    
+    
     
     
     
