@@ -549,6 +549,32 @@ class BASELINE_graph_V8_FT_2(BASELINE_graph_V8):
     BATCH_SIZE = 756
     LR = 1e-4
     
+class BASELINE_graph_V8_FT_3(BASELINE_graph_V8):
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_33_FT/EXP_33_FT_5.pth'
+    EXP_NAME = "EXP_33_FT_3_KAPPA"
+    FILTER = True
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [[1, 50], 
+                       [50, 100],
+                       [100, 150],
+                       [150, 200],
+                       [200, 250], 
+                       [250, 300],
+                       [300, 350],
+                       [350, 400],
+                       [400, 450],
+                       [450, 500],
+                       [500, 550],
+                       [500, 600]]
+    EPOCHS = 24
+    DEVICE = 'cuda:0'
+    BATCH_SIZE = 756
+    LR = 1e-4
+    WD = 0.05
+    
     
     
 class BASELINE_graph_V9(BASELINE_graph_V5):
