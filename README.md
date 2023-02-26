@@ -29,6 +29,7 @@
 |EXP_22|`ES`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `EucLadianDistanceLoss` and `CosineSimilarityLoss`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V11` |`(1, 100)`|
 |EXP_23|`1.02`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `GraphNet`, the `KNN` grouping is performed using `xyzt` and max_events are `196`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V0` |`(1, 100)`|
 |EXP_24|`1.016`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`, transformer `encoder` `8` layers, added `rotatry_emb` and `ff_glu`, and `post_emb_normalazation`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V13` |`(1, 100)`|
+|EXP_24_CLS|| same as `EXP_24` but using `VonMisesFisher3DLoss` and doing pooling `cls` token| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V13_CLS` |`cycle`|
 |EXP_24_FT|`1.005`| same as `EXP_24` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`, and `FT` at `fp32` due to `NaN`s | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V14` |`cycle`|
 |EXP_24_FT_2|`1.0014`| same as `EXP_24` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss`. `EuclidDistance`, and `FT` at `fp32` due the lenth of the sequnce is `148` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V14_FT` |`cycle`|
 |EXP_25|`1.017`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarityLoss` and `GraphNet`, the `KNN` grouping is performed using `xyz` and max_events are `196`, the first grouping in dataloder is done using `xyzt`, i am cycling thru training (going thru all batches)| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V1` |`(1, 100)`|
@@ -44,17 +45,15 @@
 |EXP_32|`BAD`| same as `EXP_16` but using `VonMisesFisher3DLoss` and `CosineSimilarity` and `EGNNmodelV7`, the `KNN` grouping is performed using `xyzt` with `9` neighbors,  and max_events are `196`, i am using `5` layer, aggregation type `sum`, with `swish` activation function embedding `dim = 128` also i have embeded `sensor_id` with `dim` = `32`, in `EXP_25` i feed coodinates as embedding, now i will only feed `6` features and keep coordinate seperated, i tried something similar in `EXP_27` but without `senosr_id` the score was bad | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V7` |`cycle`|
 |EXP_33|`1.010`| Here I am using embeding layer from `garpnet`, `graphnet` module calculates first feature based on hemophility and then concat them and passes thru `garph` convolution. This is my embedding layer. After this i just feed to standart transfomer with `6` ecnoder `8` heads. pooling is performed on `mask` with `mean` and `max` concatenated, `ff_glue` , and `rotary_pos_emb` , `max_len = 128` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V8` |`cycle`|
 |EXP_33_FT|`1.0007`| same as EXP_33 but finetuning,  `max_len = 196` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V8_FT` |`cycle`|
+|EXP_33_FT_2|`NE`| same as EXP_33 but finetuning,  `max_len = 196` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V8_FT_2` |`cycle`|
 |EXP_34|`1.025`| same as `EXP_26` but i modified `EGNNModel`, every forward pass thru convolution we will try to use `KNN` to rearange edges based on `xyz` (very similar what `dynnet` does | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V9` |`cycle`|
 |EXP_34_FT|`1.010`| same as `EXP_34` but FT using `gVonMisesFisher3DLossCosineSimularityLoss` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V9` |`cycle`|
-|EXP_35|| same as `EXP_34` but i modified `EGNNModel`, every forward pass thru convolution we will try to use `KNN` to rearange edges based on `pos`,  `xyz` (very similar what `dynnet` does added `two` more features | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V10` |`cycle`|
-|EXP_36|| same us `EXP_33` but added `2` center of gravity feaatures | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V11` |`cycle`|
+|EXP_35|`same`| same as `EXP_34` but i modified `EGNNModel`, every forward pass thru convolution we will try to use `KNN` to rearange edges based on `pos`,  `xyz` (very similar what `dynnet` does added `two` more features | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V10` |`cycle`|
+|EXP_36|`same`| same us `EXP_33` but added `2` center of gravity feaatures | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V11` |`cycle`|
 
+
+datasets version `'2.8.0'`
 ```python
 #embeding dimension changed from 150 to 196 for transformer ecnoder
 ```
 
-https://www.kaggle.com/code/solverworld/icecube-neutrino-path-least-squares-1-214
-https://github.com/lucidrains/En-transformer
-https://github.com/lucidrains/adjacent-attention-network
-https://github.com/lucidrains/equiformer-pytorch
-https://github.com/lucidrains/egnn-pytorch

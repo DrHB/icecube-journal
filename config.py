@@ -43,6 +43,7 @@ from icecube.models import (
     EncoderWithDirectionReconstructionV2,
     EncoderWithDirectionReconstructionV3,
     EncoderWithDirectionReconstructionV4,
+    EncoderWithDirectionReconstructionV5,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
@@ -309,6 +310,29 @@ class BASELINE_HF_V13(BASELINE_HF_V10):
     BATCH_SIZE = 1024 + 256
     TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
     
+class BASELINE_HF_V13_CLS(BASELINE_HF_V10):
+    EXP_NAME = "EXP_24_CLS"
+    LOSS_FUNC = VonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = EncoderWithDirectionReconstructionV5
+    DEVICE = "cuda:1"
+    EPOCHS = 24
+    WD = 0.05
+    BATCH_SIZE = 1024 + 256
+    TRN_BATCH_RANGE = [[1, 50], 
+                       [50, 100],
+                       [100, 150],
+                       [150, 200],
+                       [200, 250], 
+                       [250, 300],
+                       [300, 350],
+                       [350, 400],
+                       [400, 450],
+                       [450, 500],
+                       [500, 550],
+                       [500, 600]]
+
+    
 class BASELINE_HF_V14(BASELINE_HF_V13):
     EXP_NAME = "EXP_24_FT"
     MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_24_FT_1.pth'
@@ -319,7 +343,6 @@ class BASELINE_HF_V14(BASELINE_HF_V13):
     EPOCHS = 6
 
 
-    
 class BASELINE_HF_V14_FT(BASELINE_HF_V13):
     EXP_NAME = "EXP_24_FT_2"
     MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_24_FT/EXP_24_FT_5.pth'
@@ -501,6 +524,31 @@ class BASELINE_graph_V8_FT(BASELINE_graph_V8):
     DEVICE = 'cuda:1'
     BATCH_SIZE = 756
     LR = 1e-4
+    
+class BASELINE_graph_V8_FT_2(BASELINE_graph_V8):
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_33_FT/EXP_33_FT_5.pth'
+    EXP_NAME = "EXP_33_FT_2"
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [[1, 50], 
+                       [50, 100],
+                       [100, 150],
+                       [150, 200],
+                       [200, 250], 
+                       [250, 300],
+                       [300, 350],
+                       [350, 400],
+                       [400, 450],
+                       [450, 500],
+                       [500, 550],
+                       [500, 600]]
+    EPOCHS = 24
+    DEVICE = 'cuda:1'
+    BATCH_SIZE = 756
+    LR = 1e-4
+    
     
     
 class BASELINE_graph_V9(BASELINE_graph_V5):
