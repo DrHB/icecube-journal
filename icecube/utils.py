@@ -685,6 +685,8 @@ def gfit_shuflle(
             trn_loss += loss.item()
 
             scaler.scale(loss).backward()  # backward
+            scaler.unscale_(opt)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.)
             scaler.step(opt)  # optimzers step
             scaler.update()  # for half precision
             opt.zero_grad()  # zeroing optimizer
