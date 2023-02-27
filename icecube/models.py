@@ -10,12 +10,15 @@ __all__ = ['DIST_KERNELS', 'EuclideanDistanceLossG', 'VonMisesFisher3DLossCosine
            'IceCubeModelEncoderSensorEmbeddinngV4', 'IceCubeModelEncoderV2', 'EncoderWithDirectionReconstruction',
            'EncoderWithDirectionReconstructionV1', 'EncoderWithDirectionReconstructionV2',
            'EncoderWithDirectionReconstructionV3', 'EncoderWithDirectionReconstructionV4',
-           'EncoderWithDirectionReconstructionV5', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
-           'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked']
+           'EncoderWithDirectionReconstructionV5', 'SinusoidalPosEmb', 'ExtractorV1',
+           'EncoderWithDirectionReconstructionV6', 'EncoderWithDirectionReconstructionV7', 'exists', 'default',
+           'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT',
+           'IceCubeModelEncoderMATMasked']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
 sys.path.append('/opt/slh/archive/software/graphnet/src')
+sys.path.append('/opt/slh/icecube/')
 import torch
 from x_transformers import ContinuousTransformerWrapper, Encoder, Decoder
 from torch import nn, einsum
@@ -695,10 +698,144 @@ class EncoderWithDirectionReconstructionV5(nn.Module):
         return self.out(x)
     
     
+import math
+class SinusoidalPosEmb(nn.Module):
+    def __init__(self, dim=16, M=10000):
+        super().__init__()
+        self.dim = dim
+        self.M = M
+
+    def forward(self, x):
+        device = x.device
+        half_dim = self.dim // 2
+        emb = math.log(self.M) / half_dim
+        emb = torch.exp(torch.arange(half_dim, device=device) * (-emb))
+        emb = x[...,None] * emb[None,...]
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        return emb
+
+class ExtractorV1(nn.Module):
+    def __init__(self, dim_base=128):
+        super().__init__()
+        self.emb = SinusoidalPosEmb(dim=dim_base)
+        self.emb2 = SinusoidalPosEmb(dim=dim_base//2)
+        self.aux_emb = TokenEmbeddingV2(dim_base//4, 2, True)
+        self.qe_emb = TokenEmbeddingV2(dim_base//4, 2, True)
+        self.rank = TokenEmbeddingV2(dim_base//4, 4, True)
+        
+    def forward(self, x):
+        ice_properties = torch.stack([x['scattering'], x['absorption']], dim=2)
+        
+        x = torch.cat([self.emb(100*x['pos']).flatten(-2), 
+                       self.emb(40*x['charge']),
+                       self.emb(100*x['time']),
+                       self.aux_emb(x["aux"]),
+                       self.qe_emb(x["qe"]),
+                       self.rank(x["rank"]),
+                       self.emb2(50*ice_properties).flatten(-2)],-1)
+        return x
+    
+    
+class EncoderWithDirectionReconstructionV6(nn.Module):
+    def __init__(self, dim_in = 864, dim_out=256, attn_depth = 8, heads = 8):
+        super().__init__()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_in=dim_in,
+            dim_out=dim_out,
+            max_seq_len=440,
+            post_emb_norm = True,
+            attn_layers=Encoder(dim=dim_out,
+                                depth=attn_depth,
+                                heads=heads,
+                                ff_glu = True,
+                                rotary_pos_emb = True),
+        )
+
+        self.cls_token = nn.Parameter(torch.rand(1, 1, dim_in))
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=dim_out,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+        self.fe = ExtractorV1()
+        
+        self.apply(self._init_weights)
+        torch.nn.init.trunc_normal_(self.cls_token, std=0.02)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
+    def forward(self, batch):
+        mask = batch["mask"]
+        x = self.fe(batch)
+        bs = x.shape[0]
+        cls_tokens  = self.cls_token.expand(bs, -1, -1)
+        x = torch.cat((cls_tokens, x), dim = -2)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        x = x[:, 0]
+        return self.out(x)
+    
+    
+class EncoderWithDirectionReconstructionV7(nn.Module):
+    def __init__(self, dim_in = 864, dim_out=384, attn_depth = 12, heads = 12):
+        super().__init__()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_in=dim_in,
+            dim_out=dim_out,
+            max_seq_len=440,
+            post_emb_norm = True,
+            use_abs_pos_emb = False, 
+            emb_dropout = 0.1, 
+            attn_layers=Encoder(dim=dim_out,
+                                depth=attn_depth,
+                                heads=heads,
+                                ff_glu = True,
+                                rotary_pos_emb = True, 
+                                use_rmsnorm = True,
+
+                                layer_dropout = 0.1, 
+                                attn_dropout = 0.1,    
+                                ff_dropout = 0.1)   
+        )
+
+        self.pool_mean = PoolingWithMask("mean")
+        self.pool_max = PoolingWithMask("max")
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=dim_out * 2,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+        self.fe = ExtractorV1()
+        
+        self.apply(self._init_weights)
+
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
+    def forward(self, batch):
+        mask = batch["mask"]
+        x = self.fe(batch)
+        x = self.encoder(x, mask=mask)
+        x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask)], dim=1)
+        return self.out(x)
+    
     
 
 
-# %% ../nbs/01_models.ipynb 12
+
+# %% ../nbs/01_models.ipynb 13
 # MOLECULAR TRANFORMER
 DIST_KERNELS = {
     "exp": {

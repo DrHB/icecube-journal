@@ -5,7 +5,7 @@ __all__ = ['label_to_df', 'get_size', 'reduce_mem_usage', 'get_config_as_dict', 
            'filter_ds_based_on_kappa', 'SaveModel', 'SaveModelMetric', 'SaveModelEpoch', 'fit', 'fit_shuflle',
            'fit_shufllef32', 'gfit_shuflle', 'compare_events', 'get_batch_paths', 'angular_dist_score', 'get_score',
            'get_score_v1', 'get_score_vector', 'gget_score_vector', 'gget_score_save', 'collate_fn', 'collate_fn_v1',
-           'collate_fn_graphv0', 'eval_save', 'good_luck']
+           'collate_fn_v2', 'collate_fn_graphv0', 'eval_save', 'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -886,6 +886,36 @@ def collate_fn_v1(batch):
     }
     return batch
 
+def collate_fn_v2(batch):
+
+    event = [x["event"] for x in batch]
+    mask = [x["mask"] for x in batch]
+    label = [x["label"] for x in batch]
+    qe = [x["qe"] for x in batch]
+    aux = [x["aux"] for x in batch]
+    rank = [x["rank"] for x in batch]
+
+
+
+    event = torch.nn.utils.rnn.pad_sequence(event, batch_first=True)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True)
+    qe = torch.nn.utils.rnn.pad_sequence(qe, batch_first=True)
+    aux = torch.nn.utils.rnn.pad_sequence(aux, batch_first=True)
+    rank = torch.nn.utils.rnn.pad_sequence(rank, batch_first=True)
+    
+    batch = {
+        "pos": event[:, :, :3],
+        "time": event[:, :, 3],
+        "charge": event[:, :, 4],
+        "scattering": event[:, :, 5],
+        "absorption": event[:, :, 6],
+        "qe": qe,
+        "aux": aux,
+        "mask": mask,
+        'rank': rank,
+        "label": torch.stack(label),
+    }
+    return batch
 
 def collate_fn_graphv0(batch):
 
