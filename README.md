@@ -49,8 +49,10 @@
 |EXP_33_FT_3_KAPPA|`NE`| same as EXP_33 but finetuning,  `max_len = 196` and filtering based on `kappa > 0.5` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V8_FT_3` |`cycle`|
 |EXP_34|`1.025`| same as `EXP_26` but i modified `EGNNModel`, every forward pass thru convolution we will try to use `KNN` to rearange edges based on `xyz` (very similar what `dynnet` does | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V9` |`cycle`|
 |EXP_34_FT|`1.010`| same as `EXP_34` but FT using `gVonMisesFisher3DLossCosineSimularityLoss` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V9` |`cycle`|
+|EXP_34_FT_2|`1.09`| same as `EXP_34_FT_2` but FT | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V9_FT_2` |`cycle`|
 |EXP_35|`same`| same as `EXP_34` but i modified `EGNNModel`, every forward pass thru convolution we will try to use `KNN` to rearange edges based on `pos`,  `xyz` (very similar what `dynnet` does added `two` more features | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V10` |`cycle`|
 |EXP_36|`same`| same us `EXP_33` but added `2` center of gravity feaatures | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V11` |`cycle`|
+|EXP_37|| training transformer based on `iofass` features, added few additiaonl features like a rank, `HuggingFaceDatasetV14`,  `Encoder` is slitly bigger, with `dim_out=256`, `attn_depth = 12`, `heads = 12`, `ff_glu = True`,`rotary_pos_emb = True`,  `use_rmsnorm = True,`, `layer_dropout = 0.1` ,`attn_dropout = 0.1`, `ff_dropout = 0.1`, added `3` pooling, `max`, `mean` and `cls_token`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name NANO_TRANSFORMER` |`cycle`|
 
 
 datasets version `'2.8.0'`

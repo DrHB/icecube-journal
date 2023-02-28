@@ -30,13 +30,17 @@ def train(cfg):
         custom_model.parameters(), lr=cfg.LR, weight_decay=cfg.WD
     )
     loss_func = cfg.LOSS_FUNC()
+    len_trn_dl = (cfg.N_FILES * 200000)//cfg.BATCH_SIZE
+    warmup_steps = int(len_trn_dl * cfg.WARM_UP_PCT * cfg.EPOCHS)
+    total_steps = int(len_trn_dl * cfg.EPOCHS)
+
+    print(f"Total steps: {total_steps}, Warmup steps: {warmup_steps}")
+
     scheduler = cfg.SCHEDULER(
         opt,
-        num_warmup_steps=cfg.WARM_UP_PCT * cfg.EPOCHS,
-        num_training_steps=cfg.EPOCHS,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps,
     )
-
-
 
     cfg.FIT_FUNC(
         epochs=cfg.EPOCHS,
@@ -51,13 +55,13 @@ def train(cfg):
         sched=scheduler,
     )
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_name", type=str, default=None)
     args = parser.parse_args()
     configs = eval(f"config.{args.config_name}")
     print(f"Training with config: {configs.__dict__}")
+    print('_______________________________________________________')
     os.makedirs(configs.FOLDER/configs.EXP_NAME)
     train(configs)
 

@@ -14,6 +14,7 @@ from icecube.dataset import (
     HuggingFaceDatasetV11,
     HuggingFaceDatasetV12,
     HuggingFaceDatasetV13,
+    HuggingFaceDatasetV14,
     HuggingFaceDatasetGraphV0,
     HuggingFaceDatasetGraphV1,
 )
@@ -44,6 +45,7 @@ from icecube.models import (
     EncoderWithDirectionReconstructionV3,
     EncoderWithDirectionReconstructionV4,
     EncoderWithDirectionReconstructionV5,
+    EncoderWithDirectionReconstructionV7,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
@@ -64,6 +66,7 @@ from icecube.modelsgraph import (
     EGNNModelV7,
     EGNNModelV8,
     EGNNModelV9,
+    EGNNModelV10,
     GraphxTransformerV0,
     GraphxTransformerV1,
     gVonMisesFisher3DLossEcludeLoss,
@@ -80,6 +83,7 @@ from icecube.utils import (
     get_score_v1,
     collate_fn,
     collate_fn_v1,
+    collate_fn_v2,
     collate_fn_graphv0,
     gget_score_vector,
     gget_score_save,
@@ -597,6 +601,31 @@ class BASELINE_graph_V9_FT(BASELINE_graph_V9):
     EPOCHS = 6
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
     
+class BASELINE_graph_V9_FT_2(BASELINE_graph_V9):
+    EXP_NAME = "EXP_34_FT_2"
+    FILTER = False
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_34_FT/EXP_34_FT_5.pth'
+    LR = 3e-4
+    EPOCHS = 24
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    N_FILES = 50
+    TRN_BATCH_RANGE = [[1, 51], 
+                       [51, 101],
+                       [101, 151],
+                       [151, 201],
+                       [201, 251], 
+                       [251, 301],
+                       [301, 351],
+                       [351, 401],
+                       [401, 451],
+                       [451, 501],
+                       [501, 551],
+                       [501, 601]]    
+    DEVICE = 'cuda:1'
+    NUM_WORKERS = 22
+    BATCH_SIZE = 1024 + 256
+    
+    
     
 class BASELINE_graph_V10(BASELINE_graph_V5):
     EXP_NAME = "EXP_35"
@@ -625,6 +654,61 @@ class BASELINE_graph_V11(BASELINE_graph_V5):
     DEVICE = 'cuda:1'
     BATCH_SIZE = 1024
     
+class BASELINE_graph_V10(BASELINE_graph_V9):
+    EXP_NAME = "EXP_38"
+    FILTER = False
+    MODEL_WTS = False
+    LR = 1e-3
+    EPOCHS = 24
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    N_FILES = 50
+    TRN_BATCH_RANGE = [[1, 51], 
+                       [51, 101],
+                       [101, 151],
+                       [151, 201],
+                       [201, 251], 
+                       [251, 301],
+                       [301, 351],
+                       [351, 401],
+                       [401, 451],
+                       [451, 501],
+                       [501, 551],
+                       [501, 601]]    
+    DEVICE = 'cuda:1'
+    NUM_WORKERS = 22
+    BATCH_SIZE = 1024
+    
+    
+class NANO_TRANSFORMER(BASELINE_HF_V15):
+    MODEL_WTS = False
+    EXP_NAME = "EXP_37"
+    FILTER = False
+    LOSS_FUNC = VonMisesFisher3DLoss
+    FIT_FUNC = fit_shuflle
+    NUM_WORKERS = 22
+    TRN_DATASET = HuggingFaceDatasetV14
+    VAL_DATASET = HuggingFaceDatasetV14
+    MODEL_NAME = EncoderWithDirectionReconstructionV7
+    N_FILES = 50
+    TRN_BATCH_RANGE = [[1, 51], 
+                       [51, 101],
+                       [101, 151],
+                       [151, 201],
+                       [201, 251], 
+                       [251, 301],
+                       [301, 351],
+                       [351, 401],
+                       [401, 451],
+                       [451, 501],
+                       [501, 551],
+                       [501, 601]]
+    EPOCHS = 24 
+    DEVICE = 'cuda:0'
+    BATCH_SIZE = 512
+    LR = 3e-4
+    WD = 0.05
+    COLLAT_FN = collate_fn_v2
+    WARM_UP_PCT = 0.01
     
     
     

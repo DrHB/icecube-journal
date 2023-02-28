@@ -783,7 +783,7 @@ class EncoderWithDirectionReconstructionV6(nn.Module):
     
     
 class EncoderWithDirectionReconstructionV7(nn.Module):
-    def __init__(self, dim_in = 864, dim_out=384, attn_depth = 12, heads = 12):
+    def __init__(self, dim_in = 864, dim_out=256, attn_depth = 12, heads = 12):
         super().__init__()
         self.encoder = ContinuousTransformerWrapper(
             dim_in=dim_in,
@@ -798,7 +798,6 @@ class EncoderWithDirectionReconstructionV7(nn.Module):
                                 ff_glu = True,
                                 rotary_pos_emb = True, 
                                 use_rmsnorm = True,
-
                                 layer_dropout = 0.1, 
                                 attn_dropout = 0.1,    
                                 ff_dropout = 0.1)   
@@ -806,14 +805,16 @@ class EncoderWithDirectionReconstructionV7(nn.Module):
 
         self.pool_mean = PoolingWithMask("mean")
         self.pool_max = PoolingWithMask("max")
+        self.cls_token = nn.Parameter(torch.rand(1, 1, dim_in))
         self.out = DirectionReconstructionWithKappa(
-            hidden_size=dim_out * 2,
+            hidden_size=dim_out * 3,
             target_labels='direction',
             loss_function=VonMisesFisher3DLoss(),
         )
         self.fe = ExtractorV1()
         
         self.apply(self._init_weights)
+        torch.nn.init.trunc_normal_(self.cls_token, std=0.02)
 
 
     def _init_weights(self, module):
@@ -827,8 +828,12 @@ class EncoderWithDirectionReconstructionV7(nn.Module):
     def forward(self, batch):
         mask = batch["mask"]
         x = self.fe(batch)
+        bs = x.shape[0]
+        cls_tokens  = self.cls_token.expand(bs, -1, -1)
+        x = torch.cat((cls_tokens, x), dim = -2)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
         x = self.encoder(x, mask=mask)
-        x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask)], dim=1)
+        x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask), x[:, 0]], dim=1)
         return self.out(x)
     
     

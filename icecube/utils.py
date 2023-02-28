@@ -2,10 +2,10 @@
 
 # %% auto 0
 __all__ = ['label_to_df', 'get_size', 'reduce_mem_usage', 'get_config_as_dict', 'save_folder', 'save_pred_as_csv',
-           'filter_ds_based_on_kappa', 'SaveModel', 'SaveModelMetric', 'SaveModelEpoch', 'fit', 'fit_shuflle',
-           'fit_shufllef32', 'gfit_shuflle', 'compare_events', 'get_batch_paths', 'angular_dist_score', 'get_score',
-           'get_score_v1', 'get_score_vector', 'gget_score_vector', 'gget_score_save', 'collate_fn', 'collate_fn_v1',
-           'collate_fn_v2', 'collate_fn_graphv0', 'eval_save', 'good_luck']
+           'filter_ds_based_on_kappa', 'SaveModel', 'SaveModelMetric', 'SaveModelEpoch', 'fit', 'LenMatchBatchSampler',
+           'fit_shuflle', 'fit_shufllef32', 'gfit_shuflle', 'compare_events', 'get_batch_paths', 'angular_dist_score',
+           'get_score', 'get_score_v1', 'get_score_vector', 'gget_score_vector', 'gget_score_save', 'collate_fn',
+           'collate_fn_v1', 'collate_fn_v2', 'collate_fn_graphv0', 'eval_save', 'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -282,6 +282,40 @@ def fit(
     print("Training done")
 
 
+class LenMatchBatchSampler(torch.utils.data.BatchSampler):
+    def __iter__(self):
+        buckets = [[]] * 100
+        yielded = 0
+
+        for idx in self.sampler:
+            s = self.sampler.data_source[idx]
+            if isinstance(s,tuple): L = s[0]["mask"].sum()
+            else: L = s["mask"].sum()
+            #if torch.rand(1).item() < 0.1: L = int(1.5*L)
+            L = L // 16 
+            if len(buckets[L]) == 0:  buckets[L] = []
+            buckets[L].append(idx)
+            
+            if len(buckets[L]) == self.batch_size:
+                batch = list(buckets[L])
+                yield batch
+                yielded += 1
+                buckets[L] = []
+                
+        batch = []
+        leftover = [idx for bucket in buckets for idx in bucket]
+
+        for idx in leftover:
+            batch.append(idx)
+            if len(batch) == self.batch_size:
+                yielded += 1
+                yield batch
+                batch = []
+
+        if len(batch) > 0 and not self.drop_last:
+            yielded += 1
+            yield batch
+
 def fit_shuflle(
     epochs,
     model,
@@ -384,6 +418,8 @@ def fit_shuflle(
             trn_loss += loss.item()
 
             scaler.scale(loss).backward()  # backward
+            scaler.unscale_(opt)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.)
             scaler.step(opt)  # optimzers step
             scaler.update()  # for half precision
             opt.zero_grad()  # zeroing optimizer
@@ -424,6 +460,7 @@ def fit_shuflle(
                 "train_loss": trn_loss,
                 "valid_loss": val_loss,
                 "metric": metric_,
+                'learning_rate': opt.param_groups[0]['lr']
             }
         )
 
@@ -569,6 +606,7 @@ def fit_shufllef32(
                 "train_loss": trn_loss,
                 "valid_loss": val_loss,
                 "metric": metric_,
+                'learning_rate': opt.param_groups[0]['lr']
             }
         )
 
@@ -578,6 +616,7 @@ def fit_shufllef32(
                 "train_loss": [trn_loss],
                 "valid_loss": [val_loss],
                 "metric": [metric_],
+                
             }
         )
         print(res)
@@ -727,6 +766,7 @@ def gfit_shuflle(
                 "train_loss": trn_loss,
                 "valid_loss": val_loss,
                 "metric": metric_,
+                'learning_rate': opt.param_groups[0]['lr']
             }
         )
 
