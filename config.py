@@ -73,7 +73,7 @@ from icecube.modelsgraph import (
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
 )
-from icecube.graphdataset import GraphDasetV0, GraphDasetV1, GraphDasetV3
+from icecube.graphdataset import GraphDasetV0, GraphDasetV1, GraphDasetV3, GraphDasetV4
 
 from icecube.utils import (
     fit_shuflle,
@@ -654,14 +654,19 @@ class BASELINE_graph_V11(BASELINE_graph_V5):
     DEVICE = 'cuda:1'
     BATCH_SIZE = 1024
     
-class BASELINE_graph_V10(BASELINE_graph_V9):
+class BASELINE_graph_V12(BASELINE_graph_V9):
     EXP_NAME = "EXP_38"
     FILTER = False
     MODEL_WTS = False
-    LR = 1e-3
+    LR = (1e-3 + 1e-4)/2
     EPOCHS = 24
     LOSS_FUNC = gVonMisesFisher3DLoss
+    TRN_DATASET = GraphDasetV4
+    VAL_DATASET = GraphDasetV4
+    MODEL_NAME = EGNNModelV10
+    FIT_FUNC = gfit_shuflle
     N_FILES = 50
+    NUM_WORKERS = 22
     TRN_BATCH_RANGE = [[1, 51], 
                        [51, 101],
                        [101, 151],
@@ -676,7 +681,7 @@ class BASELINE_graph_V10(BASELINE_graph_V9):
                        [501, 601]]    
     DEVICE = 'cuda:1'
     NUM_WORKERS = 22
-    BATCH_SIZE = 1024
+    BATCH_SIZE = 756
     
     
 class NANO_TRANSFORMER(BASELINE_HF_V15):

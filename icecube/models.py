@@ -10,7 +10,7 @@ __all__ = ['DIST_KERNELS', 'EuclideanDistanceLossG', 'VonMisesFisher3DLossCosine
            'IceCubeModelEncoderSensorEmbeddinngV4', 'IceCubeModelEncoderV2', 'EncoderWithDirectionReconstruction',
            'EncoderWithDirectionReconstructionV1', 'EncoderWithDirectionReconstructionV2',
            'EncoderWithDirectionReconstructionV3', 'EncoderWithDirectionReconstructionV4',
-           'EncoderWithDirectionReconstructionV5', 'SinusoidalPosEmb', 'ExtractorV1',
+           'EncoderWithDirectionReconstructionV5', 'SinusoidalPosEmb', 'ExtractorV1', 'ExtractorV2',
            'EncoderWithDirectionReconstructionV6', 'EncoderWithDirectionReconstructionV7', 'exists', 'default',
            'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT',
            'IceCubeModelEncoderMATMasked']
@@ -713,7 +713,8 @@ class SinusoidalPosEmb(nn.Module):
         emb = x[...,None] * emb[None,...]
         emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
         return emb
-
+    
+    
 class ExtractorV1(nn.Module):
     def __init__(self, dim_base=128):
         super().__init__()
@@ -722,6 +723,29 @@ class ExtractorV1(nn.Module):
         self.aux_emb = TokenEmbeddingV2(dim_base//4, 2, True)
         self.qe_emb = TokenEmbeddingV2(dim_base//4, 2, True)
         self.rank = TokenEmbeddingV2(dim_base//4, 4, True)
+        
+    def forward(self, x):
+        ice_properties = torch.stack([x['scattering'], x['absorption']], dim=2)
+        
+        x = torch.cat([self.emb(100*x['pos']).flatten(-2), 
+                       self.emb(40*x['charge']),
+                       self.emb(100*x['time']),
+                       self.aux_emb(x["aux"]),
+                       self.qe_emb(x["qe"]),
+                       self.rank(x["rank"]),
+                       self.emb2(50*ice_properties).flatten(-2)],-1)
+        return x
+    
+
+class ExtractorV2(nn.Module):
+    def __init__(self, dim_base=128, out_dim=196):
+        super().__init__()
+        self.emb = SinusoidalPosEmb(dim=dim_base)
+        self.emb2 = SinusoidalPosEmb(dim=dim_base//2)
+        self.aux_emb = TokenEmbeddingV2(dim_base//4, 2, True)
+        self.qe_emb = TokenEmbeddingV2(dim_base//4, 2, True)
+        self.rank = TokenEmbeddingV2(dim_base//4, 4, True)
+        self.out = nn.Linear(864, out_dim)
         
     def forward(self, x):
         ice_properties = torch.stack([x['scattering'], x['absorption']], dim=2)
