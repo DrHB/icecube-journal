@@ -58,6 +58,7 @@ from icecube.models import (
 from icecube.modelsgraph import (
     DynEdgeV0,
     DynEdgeV1,
+    DynEdgeV2,
     EGNNModel,
     EGNNModelV2,
     EGNNModelV3,
@@ -73,7 +74,14 @@ from icecube.modelsgraph import (
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
 )
-from icecube.graphdataset import GraphDasetV0, GraphDasetV1, GraphDasetV3, GraphDasetV4
+from icecube.graphdataset import (
+    GraphDasetV0,
+    GraphDasetV1,
+    GraphDasetV3,
+    GraphDasetV4,
+    GraphDasetV5,
+    GraphDasetV6
+)
 
 from icecube.utils import (
     fit_shuflle,
@@ -312,8 +320,16 @@ class BASELINE_HF_V13(BASELINE_HF_V10):
     MODEL_NAME = EncoderWithDirectionReconstructionV4
     DEVICE = "cuda:0"
     BATCH_SIZE = 1024 + 256
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
-    
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
+
+
 class BASELINE_HF_V13_CLS(BASELINE_HF_V10):
     EXP_NAME = "EXP_24_CLS"
     LOSS_FUNC = VonMisesFisher3DLoss
@@ -323,24 +339,33 @@ class BASELINE_HF_V13_CLS(BASELINE_HF_V10):
     EPOCHS = 24
     WD = 0.05
     BATCH_SIZE = 1024 + 256
-    TRN_BATCH_RANGE = [[1, 50], 
-                       [50, 100],
-                       [100, 150],
-                       [150, 200],
-                       [200, 250], 
-                       [250, 300],
-                       [300, 350],
-                       [350, 400],
-                       [400, 450],
-                       [450, 500],
-                       [500, 550],
-                       [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 50],
+        [50, 100],
+        [100, 150],
+        [150, 200],
+        [200, 250],
+        [250, 300],
+        [300, 350],
+        [350, 400],
+        [400, 450],
+        [450, 500],
+        [500, 550],
+        [500, 600],
+    ]
 
-    
+
 class BASELINE_HF_V14(BASELINE_HF_V13):
     EXP_NAME = "EXP_24_FT"
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_24_FT_1.pth'
-    TRN_BATCH_RANGE = [[300, 400], [400, 500], [500, 600], [1, 100], [100, 200], [200, 300], ]
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_24_FT_1.pth"
+    TRN_BATCH_RANGE = [
+        [300, 400],
+        [400, 500],
+        [500, 600],
+        [1, 100],
+        [100, 200],
+        [200, 300],
+    ]
     LR = 1e-4
     LOSS_FUNC = VonMisesFisher3DLossCosineSimularityLoss
     FIT_FUNC = fit_shufllef32
@@ -349,8 +374,15 @@ class BASELINE_HF_V14(BASELINE_HF_V13):
 
 class BASELINE_HF_V14_FT(BASELINE_HF_V13):
     EXP_NAME = "EXP_24_FT_2"
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_24_FT/EXP_24_FT_5.pth'
-    TRN_BATCH_RANGE = [[300, 400], [400, 500], [500, 600], [1, 100], [100, 200], [200, 300], ]
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_24_FT/EXP_24_FT_5.pth"
+    TRN_BATCH_RANGE = [
+        [300, 400],
+        [400, 500],
+        [500, 600],
+        [1, 100],
+        [100, 200],
+        [200, 300],
+    ]
     LR = 1e-4
     LOSS_FUNC = VonMisesFisher3DLossEcludeLossCosine
     FIT_FUNC = fit_shufllef32
@@ -369,8 +401,16 @@ class BASELINE_graph_V1(BASELINE_HF_V10):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
-    
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
+
+
 class BASELINE_graph_V1_FT(BASELINE_HF_V10):
     EXP_NAME = "EXP_25_FT"
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
@@ -381,9 +421,17 @@ class BASELINE_graph_V1_FT(BASELINE_HF_V10):
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
     LR = 1e-4
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_25/EXP_25_9.pth'
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
-    
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_25/EXP_25_9.pth"
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
+
+
 class BASELINE_graph_V2(BASELINE_HF_V10):
     EXP_NAME = "EXP_26"
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
@@ -393,9 +441,17 @@ class BASELINE_graph_V2(BASELINE_HF_V10):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    
+
+
 class BASELINE_graph_V3(BASELINE_HF_V10):
     EXP_NAME = "EXP_27"
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
@@ -405,9 +461,17 @@ class BASELINE_graph_V3(BASELINE_HF_V10):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    
+
+
 class BASELINE_graph_V4(BASELINE_HF_V10):
     EXP_NAME = "EXP_28"
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
@@ -417,14 +481,28 @@ class BASELINE_graph_V4(BASELINE_HF_V10):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
 
 
 class BASELINE_HF_V15(BASELINE_HF_V13):
     EXP_NAME = "EXP_29"
     MODEL_WTS = False
-    TRN_BATCH_RANGE = [[300, 400], [400, 500], [500, 600], [1, 100], [100, 200], [200, 300]]
+    TRN_BATCH_RANGE = [
+        [300, 400],
+        [400, 500],
+        [500, 600],
+        [1, 100],
+        [100, 200],
+        [200, 300],
+    ]
     LR = 1e-3
     LOSS_FUNC = VonMisesFisher3DLoss
     FIT_FUNC = fit_shuflle
@@ -434,10 +512,11 @@ class BASELINE_HF_V15(BASELINE_HF_V13):
     BATCH_SIZE = 1024 + 512
     COLLAT_FN = collate_fn_v1
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV4
-    
+
+
 class BASELINE_HF_V15_FT(BASELINE_HF_V15):
     EXP_NAME = "EXP_29_FT"
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_29/EXP_29_5.pth'
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_29/EXP_29_5.pth"
     LR = 1e-4
     LOSS_FUNC = VonMisesFisher3DLossEcludeLossCosine
     FIT_FUNC = fit_shufllef32
@@ -447,12 +526,12 @@ class BASELINE_HF_V15_FT(BASELINE_HF_V15):
     COLLAT_FN = collate_fn_v1
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV4
     BATCH_SIZE = 768
-    
-    
+
+
 class BASELINE_HF_V15_FT_2(BASELINE_HF_V15_FT):
     EXP_NAME = "EXP_29_FT_2"
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_29_FT/EXP_29_FT_5.pth'
-    LR = (1e-4 + 1e-3)/2
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_29_FT/EXP_29_FT_5.pth"
+    LR = (1e-4 + 1e-3) / 2
     LOSS_FUNC = VonMisesFisher3DLossEcludeLossCosine
     FIT_FUNC = fit_shufllef32
     EPOCHS = 6
@@ -461,7 +540,8 @@ class BASELINE_HF_V15_FT_2(BASELINE_HF_V15_FT):
     COLLAT_FN = collate_fn_v1
     MODEL_NAME = IceCubeModelEncoderSensorEmbeddinngV4
     BATCH_SIZE = 512
-    
+
+
 class BASELINE_graph_V5(BASELINE_HF_V10):
     EXP_NAME = "EXP_30"
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
@@ -471,9 +551,17 @@ class BASELINE_graph_V5(BASELINE_HF_V10):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    
+
+
 class BASELINE_graph_V6(BASELINE_graph_V5):
     EXP_NAME = "EXP_31"
     LOSS_FUNC = gVonMisesFisher3DLoss
@@ -483,11 +571,19 @@ class BASELINE_graph_V6(BASELINE_graph_V5):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    DEVICE = 'cuda:1'
+    DEVICE = "cuda:1"
     BATCH_SIZE = 1024
-    
+
+
 class BASELINE_graph_V7(BASELINE_HF_V10):
     EXP_NAME = "EXP_32"
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
@@ -497,11 +593,18 @@ class BASELINE_graph_V7(BASELINE_HF_V10):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV1
     VAL_DATASET = GraphDasetV1
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    BATCH_SIZE = 1024 
-    
-    
+    BATCH_SIZE = 1024
+
+
 class BASELINE_graph_V8(BASELINE_graph_V5):
     EXP_NAME = "EXP_33"
     LOSS_FUNC = gVonMisesFisher3DLoss
@@ -511,76 +614,96 @@ class BASELINE_graph_V8(BASELINE_graph_V5):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV3
     VAL_DATASET = GraphDasetV3
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    DEVICE = 'cuda:1'
+    DEVICE = "cuda:1"
     BATCH_SIZE = 1024
-    
+
+
 class BASELINE_graph_V8_FT(BASELINE_graph_V8):
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_33/EXP_33_11.pth'
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_33/EXP_33_11.pth"
     EXP_NAME = "EXP_33_FT"
     LOSS_FUNC = gVonMisesFisher3DLoss
     NUM_WORKERS = 22
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 6
-    DEVICE = 'cuda:1'
+    DEVICE = "cuda:1"
     BATCH_SIZE = 756
     LR = 1e-4
-    
+
+
 class BASELINE_graph_V8_FT_2(BASELINE_graph_V8):
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_33_FT/EXP_33_FT_5.pth'
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_33_FT/EXP_33_FT_5.pth"
     EXP_NAME = "EXP_33_FT_2"
     LOSS_FUNC = gVonMisesFisher3DLoss
     NUM_WORKERS = 22
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 50], 
-                       [50, 100],
-                       [100, 150],
-                       [150, 200],
-                       [200, 250], 
-                       [250, 300],
-                       [300, 350],
-                       [350, 400],
-                       [400, 450],
-                       [450, 500],
-                       [500, 550],
-                       [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 50],
+        [50, 100],
+        [100, 150],
+        [150, 200],
+        [200, 250],
+        [250, 300],
+        [300, 350],
+        [350, 400],
+        [400, 450],
+        [450, 500],
+        [500, 550],
+        [500, 600],
+    ]
     EPOCHS = 24
-    DEVICE = 'cuda:1'
+    DEVICE = "cuda:1"
     BATCH_SIZE = 756
     LR = 1e-4
-    
+
+
 class BASELINE_graph_V8_FT_3(BASELINE_graph_V8):
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_33_FT/EXP_33_FT_5.pth'
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_33_FT/EXP_33_FT_5.pth"
     EXP_NAME = "EXP_33_FT_3_KAPPA"
     FILTER = True
     LOSS_FUNC = gVonMisesFisher3DLoss
     NUM_WORKERS = 22
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 50], 
-                       [50, 100],
-                       [100, 150],
-                       [150, 200],
-                       [200, 250], 
-                       [250, 300],
-                       [300, 350],
-                       [350, 400],
-                       [400, 450],
-                       [450, 500],
-                       [500, 550],
-                       [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 50],
+        [50, 100],
+        [100, 150],
+        [150, 200],
+        [200, 250],
+        [250, 300],
+        [300, 350],
+        [350, 400],
+        [400, 450],
+        [450, 500],
+        [500, 550],
+        [500, 600],
+    ]
     EPOCHS = 24
-    DEVICE = 'cuda:0'
+    DEVICE = "cuda:0"
     BATCH_SIZE = 756
     LR = 1e-4
     WD = 0.05
-    
-    
-    
+
+
 class BASELINE_graph_V9(BASELINE_graph_V5):
     EXP_NAME = "EXP_34"
     LOSS_FUNC = gVonMisesFisher3DLoss
@@ -590,43 +713,53 @@ class BASELINE_graph_V9(BASELINE_graph_V5):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    DEVICE = 'cuda:0'
-    
+    DEVICE = "cuda:0"
+
+
 class BASELINE_graph_V9_FT(BASELINE_graph_V9):
     EXP_NAME = "EXP_34_FT"
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_34/EXP_34_11.pth'
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_34/EXP_34_11.pth"
     LR = 1e-4
     EPOCHS = 6
     LOSS_FUNC = gVonMisesFisher3DLossCosineSimularityLoss
-    
+
+
 class BASELINE_graph_V9_FT_2(BASELINE_graph_V9):
     EXP_NAME = "EXP_34_FT_2"
     FILTER = False
-    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_34_FT/EXP_34_FT_5.pth'
+    MODEL_WTS = "/opt/slh/icecube/RESULTS/EXP_34_FT/EXP_34_FT_5.pth"
     LR = 3e-4
     EPOCHS = 24
     LOSS_FUNC = gVonMisesFisher3DLoss
     N_FILES = 50
-    TRN_BATCH_RANGE = [[1, 51], 
-                       [51, 101],
-                       [101, 151],
-                       [151, 201],
-                       [201, 251], 
-                       [251, 301],
-                       [301, 351],
-                       [351, 401],
-                       [401, 451],
-                       [451, 501],
-                       [501, 551],
-                       [501, 601]]    
-    DEVICE = 'cuda:1'
+    TRN_BATCH_RANGE = [
+        [1, 51],
+        [51, 101],
+        [101, 151],
+        [151, 201],
+        [201, 251],
+        [251, 301],
+        [301, 351],
+        [351, 401],
+        [401, 451],
+        [451, 501],
+        [501, 551],
+        [501, 601],
+    ]
+    DEVICE = "cuda:1"
     NUM_WORKERS = 22
     BATCH_SIZE = 1024 + 256
-    
-    
-    
+
+
 class BASELINE_graph_V10(BASELINE_graph_V5):
     EXP_NAME = "EXP_35"
     LOSS_FUNC = gVonMisesFisher3DLoss
@@ -636,10 +769,18 @@ class BASELINE_graph_V10(BASELINE_graph_V5):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV0
     VAL_DATASET = GraphDasetV0
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    DEVICE = 'cuda:0'
-    
+    DEVICE = "cuda:0"
+
+
 class BASELINE_graph_V11(BASELINE_graph_V5):
     EXP_NAME = "EXP_36"
     LOSS_FUNC = gVonMisesFisher3DLoss
@@ -649,16 +790,24 @@ class BASELINE_graph_V11(BASELINE_graph_V5):
     METRIC = gget_score_vector
     TRN_DATASET = GraphDasetV3
     VAL_DATASET = GraphDasetV3
-    TRN_BATCH_RANGE = [[1, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]]
+    TRN_BATCH_RANGE = [
+        [1, 100],
+        [100, 200],
+        [200, 300],
+        [300, 400],
+        [400, 500],
+        [500, 600],
+    ]
     EPOCHS = 12
-    DEVICE = 'cuda:1'
+    DEVICE = "cuda:1"
     BATCH_SIZE = 1024
-    
+
+
 class BASELINE_graph_V12(BASELINE_graph_V9):
     EXP_NAME = "EXP_38"
     FILTER = False
     MODEL_WTS = False
-    LR = (1e-3 + 1e-4)/2
+    LR = (1e-3 + 1e-4) / 2
     EPOCHS = 24
     LOSS_FUNC = gVonMisesFisher3DLoss
     TRN_DATASET = GraphDasetV4
@@ -667,23 +816,25 @@ class BASELINE_graph_V12(BASELINE_graph_V9):
     FIT_FUNC = gfit_shuflle
     N_FILES = 50
     NUM_WORKERS = 22
-    TRN_BATCH_RANGE = [[1, 51], 
-                       [51, 101],
-                       [101, 151],
-                       [151, 201],
-                       [201, 251], 
-                       [251, 301],
-                       [301, 351],
-                       [351, 401],
-                       [401, 451],
-                       [451, 501],
-                       [501, 551],
-                       [501, 601]]    
-    DEVICE = 'cuda:1'
+    TRN_BATCH_RANGE = [
+        [1, 51],
+        [51, 101],
+        [101, 151],
+        [151, 201],
+        [201, 251],
+        [251, 301],
+        [301, 351],
+        [351, 401],
+        [401, 451],
+        [451, 501],
+        [501, 551],
+        [501, 601],
+    ]
+    DEVICE = "cuda:1"
     NUM_WORKERS = 22
     BATCH_SIZE = 756
-    
-    
+
+
 class NANO_TRANSFORMER(BASELINE_HF_V15):
     MODEL_WTS = False
     EXP_NAME = "EXP_37"
@@ -695,30 +846,96 @@ class NANO_TRANSFORMER(BASELINE_HF_V15):
     VAL_DATASET = HuggingFaceDatasetV14
     MODEL_NAME = EncoderWithDirectionReconstructionV7
     N_FILES = 50
-    TRN_BATCH_RANGE = [[1, 51], 
-                       [51, 101],
-                       [101, 151],
-                       [151, 201],
-                       [201, 251], 
-                       [251, 301],
-                       [301, 351],
-                       [351, 401],
-                       [401, 451],
-                       [451, 501],
-                       [501, 551],
-                       [501, 601]]
-    EPOCHS = 24 
-    DEVICE = 'cuda:0'
+    TRN_BATCH_RANGE = [
+        [1, 51],
+        [51, 101],
+        [101, 151],
+        [151, 201],
+        [201, 251],
+        [251, 301],
+        [301, 351],
+        [351, 401],
+        [401, 451],
+        [451, 501],
+        [501, 551],
+        [551, 601],
+    ]
+    EPOCHS = 24
+    DEVICE = "cuda:0"
     BATCH_SIZE = 512
     LR = 3e-4
     WD = 0.05
     COLLAT_FN = collate_fn_v2
     WARM_UP_PCT = 0.01
     
+
+
+class BASELINE_graph_V13(BASELINE_graph_V9):
+    EXP_NAME = "EXP_39"
+    FILTER = False
+    MODEL_WTS = False
+    LR = (1e-3 + 1e-4) / 2
+    EPOCHS = 24 + 12
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    TRN_DATASET = GraphDasetV5
+    VAL_DATASET = GraphDasetV5
+    MODEL_NAME = DynEdgeV2
+    FIT_FUNC = gfit_shuflle
+    N_FILES = 50
+    NUM_WORKERS = 22
+    TRN_BATCH_RANGE = [
+        [1, 51],
+        [51, 101],
+        [101, 151],
+        [151, 201],
+        [201, 251],
+        [251, 301],
+        [301, 351],
+        [351, 401],
+        [401, 451],
+        [451, 501],
+        [501, 551],
+        [551, 601],
+    ]
+    DEVICE = "cuda:1"
+    NUM_WORKERS = 22
+    BATCH_SIZE = 1024 + 512
     
-    
-    
-    
+class BASELINE_graph_V13_FT(BASELINE_graph_V9):
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_39/EXP_39_27.pth'
+    EXP_NAME = "EXP_39_FT"
+    FILTER = False
+    MODEL_WTS = False
+    LR = 1e-4
+    WD = 0.05
+    EPOCHS = 13
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    TRN_DATASET = GraphDasetV6
+    VAL_DATASET = GraphDasetV6
+    MODEL_NAME = DynEdgeV2
+    FIT_FUNC = gfit_shuflle
+    N_FILES = 50
+    NUM_WORKERS = 22
+    TRN_BATCH_RANGE = [
+        [501, 551],
+        [601, 651],
+        [51, 101],
+        [101, 151],
+        [1, 51],
+        [151, 201],
+        [251, 301],
+        [201, 251],
+        [301, 351],
+        [401, 451],
+        [351, 401],
+        [451, 501],
+        [551, 601],
+    ]
+    VAL_BATCH_RANGE = (655, 660)
+    DEVICE = "cuda:1"
+    NUM_WORKERS = 22
+    BATCH_SIZE = 1024
+
 
 # class BASELINE_HF_V11(BASELINE_HF_V4):
 #    EXP_NAME = "EXP_21"

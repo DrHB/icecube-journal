@@ -54,6 +54,8 @@
 |EXP_36|`same`| same us `EXP_33` but added `2` center of gravity feaatures | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V11` |`cycle`|
 |EXP_37|| training transformer based on `iofass` features, added few additiaonl features like a rank, `HuggingFaceDatasetV14`,  `Encoder` is slitly bigger, with `dim_out=256`, `attn_depth = 12`, `heads = 12`, `ff_glu = True`,`rotary_pos_emb = True`,  `use_rmsnorm = True,`, `layer_dropout = 0.1` ,`attn_dropout = 0.1`, `ff_dropout = 0.1`, added `3` pooling, `max`, `mean` and `cls_token`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name NANO_TRANSFORMER` |`cycle`|
 |EXP_38||training `EGNN` with `10` layers, `GELU` activation function, added features based on `gExtractorV1`, `aux-emb`, `qe - emb`, edge rebuilding on updated `position` based on `7` neighbors, using `xyztc` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V12` |`cycle`|
+|EXP_39|`1.000009`|training `DynNet` similar to `EXP_29_FT` but with `5` layers, `GELU` activation function using `xyztc` training crashed due to `cpu`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13` |`cycle`|
+|EXP_39_FT||FT `EXP_39_FT`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT` |`cycle`|
 
 
 datasets version `'2.8.0'`

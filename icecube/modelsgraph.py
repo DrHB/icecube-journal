@@ -897,7 +897,7 @@ class DynEdgeV2(nn.Module):
             nb_neighbours=8,
             global_pooling_schemes=["min", "max", "mean", "sum"],
             features_subset=slice(0, 3), 
-            dynedge_layer_sizes = [(128, 256), (256, 512), (512, 512), (512, 256)]
+            dynedge_layer_sizes = [(128, 256), (336, 256), (336, 512), (512, 512), (512, 256)]
         )
 
         self.out = DirectionReconstructionWithKappa(
