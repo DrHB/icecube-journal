@@ -3,11 +3,12 @@
 # %% auto 0
 __all__ = ['load_data', 'IceCubeCasheDatasetV0', 'IceCubeCasheDatasetV1', 'HuggingFaceDatasetV0', 'normalize',
            'HuggingFaceDatasetV1', 'HuggingFaceDatasetV2', 'HuggingFaceDatasetV3', 'HuggingFaceDatasetV4',
-           'event_filtering_v1', 'event_filtering_v2', 'HuggingFaceDatasetV5', 'ice_transparency', 'prepare_sensors',
-           'convert_to_3d', 'HuggingFaceDatasetV6', 'HuggingFaceDatasetV7', 'HuggingFaceDatasetV8',
+           'event_filtering_v1', 'event_filtering_v2', 'event_filtering_v3', 'HuggingFaceDatasetV5', 'ice_transparency',
+           'prepare_sensors', 'convert_to_3d', 'HuggingFaceDatasetV6', 'HuggingFaceDatasetV7', 'HuggingFaceDatasetV8',
            'HuggingFaceDatasetV9', 'HuggingFaceDatasetV10', 'HuggingFaceDatasetV11', 'HuggingFaceDatasetV12',
-           'HuggingFaceDatasetV13', 'HuggingFaceDatasetV14', 'get_distance_matrix', 'get_distance_matrix_for_indices',
-           'get_distance_matrix_from_csv', 'HuggingFaceDatasetGraphV0', 'HuggingFaceDatasetGraphV1', 'good_luck']
+           'HuggingFaceDatasetV13', 'HuggingFaceDatasetV14', 'HuggingFaceDatasetV15', 'get_distance_matrix',
+           'get_distance_matrix_for_indices', 'get_distance_matrix_from_csv', 'HuggingFaceDatasetGraphV0',
+           'HuggingFaceDatasetGraphV1', 'good_luck']
 
 # %% ../nbs/00_dataset.ipynb 1
 from torch.utils.data import Dataset, DataLoader
@@ -481,6 +482,21 @@ def event_filtering_v2(batch, max_pulse_count=128, t_valid_length=6199.700247193
         batch = batch.sort_values(by="time")
     return batch
         
+        
+def event_filtering_v3(batch, max_pulse_count=128, t_valid_length=6199.700247193777):
+    "filtering only by auxiliary and then by time"
+    t_peak = batch["time"][batch["charge"].argmax()]
+    t_valid_min = t_peak - t_valid_length
+    t_valid_max = t_peak + t_valid_length
+    t_valid = (batch["time"] > t_valid_min) * (batch["time"] < t_valid_max)
+    batch["rank"] = 2 * (1 - batch["auxiliary"]) + (t_valid)
+    if batch.shape[0] > max_pulse_count:
+        batch = batch.sort_values(by=["auxiliary"])
+        # pick-up from backward
+        batch = batch[:max_pulse_count]
+            # resort by time
+        batch = batch.sort_values(by="time")
+    return batch
         
 
 class HuggingFaceDatasetV5(Dataset):
@@ -1223,8 +1239,63 @@ class HuggingFaceDatasetV14(Dataset):
             }
         )
         return batch
+    
+class HuggingFaceDatasetV15(Dataset):
+    """
+    same as V9 but with 148, returning qe and aux as long tesnors 
 
-# %% ../nbs/00_dataset.ipynb 11
+
+    """
+
+    def __init__(self, ds, max_events=196):
+        self.ds = ds
+        self.max_events = max_events
+        self.f_scattering, self.f_absorption = ice_transparency()
+        self.sensor_data = prepare_sensors()
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        item = self.ds[idx]
+
+        event = pd.DataFrame(item)[
+            [
+                "time",
+                "charge",
+                "auxiliary",
+                "x",
+                "y",
+                "z",
+                "sensor_id"
+            ]
+        ].astype(np.float32)
+        t = (event["time"].values - 1.0e04) / 3.0e4
+        event["time"] /= event["time"].max()
+
+
+        event = event_filtering_v3(event, max_pulse_count=self.max_events)
+        event[["x", "y", "z"]] /= 500
+        event["charge"] = np.log10(event["charge"]) / 3.0
+        event["time"] = t[: self.max_events]
+        event["scattering"] = self.f_scattering(event["z"].values).reshape(-1)
+        event["absorption"] = self.f_absorption(event["z"].values).reshape(-1)
+        event['qe'] =  self.sensor_data.loc[event['sensor_id'].values].values.reshape(-1)
+        mask = np.ones(len(event), dtype=bool)
+        label = convert_to_3d(item["azimuth"], item["zenith"])
+        batch = deepcopy(
+            {
+                "event" : torch.tensor(event[["x", "y", "z", "time", "charge", "scattering", "absorption"]].values, dtype=torch.float32),
+                "rank": torch.tensor(event['rank'].values, dtype=torch.long),
+                "qe": torch.tensor(event['qe'].values + 1, dtype=torch.long),
+                "aux": torch.tensor(event['auxiliary'].values, dtype=torch.long,),
+                "label": torch.tensor(label),
+                "mask": torch.tensor(mask)
+            }
+        )
+        return batch
+
+# %% ../nbs/00_dataset.ipynb 12
 # pytorch function that takes [n, x, y, z] tensor and calculates the distance between each point and returns [n x n] matrix using torch.cdist
 def get_distance_matrix(xyz):
     return torch.cdist(xyz, xyz)
@@ -1393,6 +1464,6 @@ class HuggingFaceDatasetGraphV1(Dataset):
 
 
 
-# %% ../nbs/00_dataset.ipynb 13
+# %% ../nbs/00_dataset.ipynb 14
 def good_luck():
     return True

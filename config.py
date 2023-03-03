@@ -15,6 +15,7 @@ from icecube.dataset import (
     HuggingFaceDatasetV12,
     HuggingFaceDatasetV13,
     HuggingFaceDatasetV14,
+    HuggingFaceDatasetV15,
     HuggingFaceDatasetGraphV0,
     HuggingFaceDatasetGraphV1,
 )
@@ -859,6 +860,7 @@ class NANO_TRANSFORMER(BASELINE_HF_V15):
         [451, 501],
         [501, 551],
         [551, 601],
+        [601, 651],
     ]
     EPOCHS = 24
     DEVICE = "cuda:0"
@@ -867,6 +869,43 @@ class NANO_TRANSFORMER(BASELINE_HF_V15):
     WD = 0.05
     COLLAT_FN = collate_fn_v2
     WARM_UP_PCT = 0.01
+    VAL_BATCH_RANGE = (655, 660)
+    
+    
+class NANO_TRANSFORMER_FT(BASELINE_HF_V15):
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_37/EXP_37_12.pth'
+    EXP_NAME = "EXP_37_FT"
+    FILTER = False
+    LOSS_FUNC = VonMisesFisher3DLoss
+    FIT_FUNC = fit_shuflle
+    NUM_WORKERS = 22
+    TRN_DATASET = HuggingFaceDatasetV15
+    VAL_DATASET = HuggingFaceDatasetV15
+    MODEL_NAME = EncoderWithDirectionReconstructionV7
+    N_FILES = 50
+    TRN_BATCH_RANGE = [
+        [601, 651],
+        [1, 51],
+        [51, 101],
+        [101, 151],
+        [151, 201],
+        [201, 251],
+        [251, 301],
+        [301, 351],
+        [351, 401],
+        [401, 451],
+        [451, 501],
+        [501, 551],
+        [551, 601],
+    ]
+    EPOCHS = 13
+    DEVICE = "cuda:0"
+    BATCH_SIZE = 512 - 128
+    LR = 2e-4
+    WD = 0.05
+    COLLAT_FN = collate_fn_v2
+    WARM_UP_PCT = 0.0001
+    VAL_BATCH_RANGE = (655, 660)
     
 
 
@@ -905,7 +944,6 @@ class BASELINE_graph_V13_FT(BASELINE_graph_V9):
     MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_39/EXP_39_27.pth'
     EXP_NAME = "EXP_39_FT"
     FILTER = False
-    MODEL_WTS = False
     LR = 1e-4
     WD = 0.05
     EPOCHS = 13
@@ -917,8 +955,8 @@ class BASELINE_graph_V13_FT(BASELINE_graph_V9):
     N_FILES = 50
     NUM_WORKERS = 22
     TRN_BATCH_RANGE = [
-        [501, 551],
         [601, 651],
+        [501, 551],
         [51, 101],
         [101, 151],
         [1, 51],
@@ -935,6 +973,44 @@ class BASELINE_graph_V13_FT(BASELINE_graph_V9):
     DEVICE = "cuda:1"
     NUM_WORKERS = 22
     BATCH_SIZE = 1024
+    WARM_UP_PCT = 0.005
+    
+    
+class BASELINE_graph_V13_FT_2(BASELINE_graph_V9):
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_39/EXP_39_27.pth'
+    EXP_NAME = "EXP_39_FT_2"
+    FILTER = False
+    LR = (1e-4 + 1e-3)/2
+    WD = 0.05
+    EPOCHS = 13
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    TRN_DATASET = GraphDasetV5
+    VAL_DATASET = GraphDasetV5
+    MODEL_NAME = DynEdgeV2
+    FIT_FUNC = gfit_shuflle
+    N_FILES = 50
+    NUM_WORKERS = 22
+    TRN_BATCH_RANGE = [
+        [601, 651],
+        [501, 551],
+        [51, 101],
+        [101, 151],
+        [1, 51],
+        [151, 201],
+        [251, 301],
+        [201, 251],
+        [301, 351],
+        [401, 451],
+        [351, 401],
+        [451, 501],
+        [551, 601],
+    ]
+    VAL_BATCH_RANGE = (655, 660)
+    DEVICE = "cuda:1"
+    NUM_WORKERS = 22
+    BATCH_SIZE = 1024
+    WARM_UP_PCT = 0.005
+
 
 
 # class BASELINE_HF_V11(BASELINE_HF_V4):
