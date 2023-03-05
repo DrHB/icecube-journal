@@ -71,6 +71,8 @@ from icecube.modelsgraph import (
     EGNNModelV10,
     GraphxTransformerV0,
     GraphxTransformerV1,
+    GraphxTransformerV2,
+    GraphxTransformerV3,
     gVonMisesFisher3DLossEcludeLoss,
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
@@ -88,6 +90,7 @@ from icecube.utils import (
     fit_shuflle,
     get_score,
     gfit_shuflle,
+    gfit_shuflle_f32,
     get_score_vector,
     get_score_v1,
     collate_fn,
@@ -1010,6 +1013,76 @@ class BASELINE_graph_V13_FT_2(BASELINE_graph_V9):
     NUM_WORKERS = 22
     BATCH_SIZE = 1024
     WARM_UP_PCT = 0.005
+    
+class BASELINE_graph_V14(BASELINE_graph_V5):
+    MODEL_WTS = None
+    EXP_NAME = "EXP_40"
+    FILTER = False
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = GraphxTransformerV2
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [
+        [501, 551],
+        [51, 101],
+        [101, 151],
+        [1, 51],
+        [151, 201],
+        [251, 301],
+        [201, 251],
+        [301, 351],
+        [401, 451],
+        [351, 401],
+        [451, 501],
+        [551, 601],
+        [601, 651],
+    ]
+    EPOCHS = 13
+    DEVICE = "cuda:0"
+    BATCH_SIZE = 1024 - 256
+    VAL_BATCH_RANGE = (655, 660)
+    LR = 1e-3
+    N_FILES = 50
+    WARM_UP_PCT = 0.01
+    
+class BASELINE_graph_V14_FT(BASELINE_graph_V5):
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_40/EXP_40_0.pth'
+    EXP_NAME = "EXP_40_FT"
+    FILTER = False
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = GraphxTransformerV3
+    FIT_FUNC = gfit_shuflle_f32
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [
+        [101, 151],
+        [1, 51],
+        [151, 201],
+        [251, 301],
+        [201, 251],
+        [301, 351],
+        [401, 451],
+        [351, 401],
+        [451, 501],
+        [551, 601],
+        [601, 651],
+        [501, 551],
+        [51, 101],
+    ]
+    EPOCHS = 13
+    DEVICE = "cuda:0"
+    BATCH_SIZE = 512
+    VAL_BATCH_RANGE = (655, 660)
+    LR = 5e-4
+    WD = 0.05
+    N_FILES = 50
+    WARM_UP_PCT = 0.01
+
 
 
 

@@ -10,10 +10,10 @@ __all__ = ['DIST_KERNELS', 'EuclideanDistanceLossG', 'VonMisesFisher3DLossCosine
            'IceCubeModelEncoderSensorEmbeddinngV4', 'IceCubeModelEncoderV2', 'EncoderWithDirectionReconstruction',
            'EncoderWithDirectionReconstructionV1', 'EncoderWithDirectionReconstructionV2',
            'EncoderWithDirectionReconstructionV3', 'EncoderWithDirectionReconstructionV4',
-           'EncoderWithDirectionReconstructionV5', 'SinusoidalPosEmb', 'ExtractorV1', 'ExtractorV2',
-           'EncoderWithDirectionReconstructionV6', 'EncoderWithDirectionReconstructionV7', 'exists', 'default',
-           'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT',
-           'IceCubeModelEncoderMATMasked']
+           'EncoderWithDirectionReconstructionV5', 'SinusoidalPosEmb', 'ExtractorV0', 'ExtractorV1', 'ExtractorV2',
+           'EncoderWithDirectionReconstructionV6', 'EncoderWithDirectionReconstructionV7',
+           'EncoderWithDirectionReconstructionV8', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
+           'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -715,6 +715,31 @@ class SinusoidalPosEmb(nn.Module):
         return emb
     
     
+class ExtractorV0(nn.Module):
+    def __init__(self, dim_base=128, dim=384):
+        super().__init__()
+        self.emb = SinusoidalPosEmb(dim=dim_base)
+        self.emb2 = SinusoidalPosEmb(dim=dim_base//2)
+        self.aux_emb = nn.Embedding(2,dim_base//2)
+        self.qe_emb = nn.Embedding(2,dim_base//2)
+        self.proj = nn.Linear(dim_base*7,dim)
+        
+    def forward(self, x, Lmax=None):
+        pos = x['pos'] if Lmax is None else x['pos'][:,:Lmax]
+        charge = x['charge'] if Lmax is None else x['charge'][:,:Lmax]
+        time = x['time'] if Lmax is None else x['time'][:,:Lmax]
+        auxiliary = x['aux'] if Lmax is None else x['auxiliary'][:,:Lmax]
+        qe = x['qe'] if Lmax is None else x['qe'][:,:Lmax]
+        ice_properties = x['ice_properties'] if Lmax is None else x['ice_properties'][:,:Lmax]
+        
+        x = torch.cat([self.emb(100*pos).flatten(-2), self.emb(40*charge),
+                       self.emb(100*time),self.aux_emb(auxiliary),self.qe_emb(qe),
+                       self.emb2(50*ice_properties).flatten(-2)],-1)
+        x = self.proj(x)
+        return x
+
+    
+    
 class ExtractorV1(nn.Module):
     def __init__(self, dim_base=128):
         super().__init__()
@@ -737,6 +762,29 @@ class ExtractorV1(nn.Module):
         return x
     
 
+class ExtractorV2(nn.Module):
+    def __init__(self, dim_base=128, out_dim=196):
+        super().__init__()
+        self.emb = SinusoidalPosEmb(dim=dim_base)
+        self.emb2 = SinusoidalPosEmb(dim=dim_base//2)
+        self.aux_emb = TokenEmbeddingV2(dim_base//4, 2, True)
+        self.qe_emb = TokenEmbeddingV2(dim_base//4, 2, True)
+        self.rank = TokenEmbeddingV2(dim_base//4, 4, True)
+        self.out = nn.Linear(864, out_dim)
+        
+    def forward(self, x):
+        ice_properties = torch.stack([x['scattering'], x['absorption']], dim=2)
+        
+        x = torch.cat([self.emb(100*x['pos']).flatten(-2), 
+                       self.emb(40*x['charge']),
+                       self.emb(100*x['time']),
+                       self.aux_emb(x["aux"]),
+                       self.qe_emb(x["qe"]),
+                       self.rank(x["rank"]),
+                       self.emb2(50*ice_properties).flatten(-2)],-1)
+        return x
+    
+    
 class ExtractorV2(nn.Module):
     def __init__(self, dim_base=128, out_dim=196):
         super().__init__()
@@ -860,11 +908,65 @@ class EncoderWithDirectionReconstructionV7(nn.Module):
         x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask), x[:, 0]], dim=1)
         return self.out(x)
     
-    
+from timm.models.layers import drop_path, to_2tuple, trunc_normal_
+class EncoderWithDirectionReconstructionV8(nn.Module):
+    def __init__(self, dim_in = 864, dim_out=256, attn_depth = 8, heads = 12):
+        super().__init__()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_in=dim_out,
+            dim_out=dim_out,
+            max_seq_len=300,
+            post_emb_norm = True,
+            use_abs_pos_emb = False, 
+            emb_dropout = 0.1, 
+            attn_layers=Encoder(dim=dim_out,
+                                depth=attn_depth,
+                                heads=heads,
+                                ff_glu = True,
+                                rel_pos_bias = True, 
+                                layer_dropout = 0.05, 
+                                attn_dropout = 0.05,    
+                                ff_dropout = 0.05)   
+        )
+        
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.pool_mean = PoolingWithMask("mean")
+        self.pool_max = PoolingWithMask("max")
+        
+        self.out = nn.Linear(dim_out * 3, 3)
+        self.fe = ExtractorV0(dim=dim_out, dim_base=96)
+        
+        self.apply(self._init_weights)
+        trunc_normal_(self.cls_token.weight, std=.02)
+        #torch.nn.init.trunc_normal_(self.cls_token, std=0.02)
+
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
+    def forward(self, batch):
+        mask = batch["mask"]
+        Lmax = mask.sum(-1).max()
+        x = self.fe(batch, Lmax-1)
+        
+        bs = x.shape[0]
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = x[:,:Lmax]
+        mask = mask[:,:Lmax]
+        x = self.encoder(x, mask=mask)
+        x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask), x[:, 0]], dim=1)
+        return self.out(x)
 
 
 
-# %% ../nbs/01_models.ipynb 13
+# %% ../nbs/01_models.ipynb 14
 # MOLECULAR TRANFORMER
 DIST_KERNELS = {
     "exp": {

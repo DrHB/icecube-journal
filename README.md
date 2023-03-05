@@ -57,6 +57,7 @@
 |EXP_39|`1.000009`|training `DynNet` similar to `EXP_29_FT` but with `5` layers, `GELU` activation function using `xyztc` training crashed due to `cpu`| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13` |`cycle`|
 |EXP_39_FT|`1.000009`|FT `EXP_39_FT` no improvent loss fluctuates...| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT` |`cycle`|
 |EXP_39_FT_2|`1.000009`|FT `EXP_39_FT_2` no improvent loss fluctuates...| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT_2` |`cycle`|
+|EXP_40||combining `EXP_25` with Transformer , GNN->Transformer, added residual connection, concat features after GNN and also after Pool, with transformer| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT_2` |`cycle`|
 
 
 datasets version `'2.8.0'`

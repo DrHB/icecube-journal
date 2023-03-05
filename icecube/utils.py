@@ -3,9 +3,10 @@
 # %% auto 0
 __all__ = ['label_to_df', 'get_size', 'reduce_mem_usage', 'get_config_as_dict', 'save_folder', 'save_pred_as_csv',
            'filter_ds_based_on_kappa', 'SaveModel', 'SaveModelMetric', 'SaveModelEpoch', 'fit', 'LenMatchBatchSampler',
-           'fit_shuflle', 'fit_shufllef32', 'gfit_shuflle', 'compare_events', 'get_batch_paths', 'angular_dist_score',
-           'get_score', 'get_score_v1', 'get_score_vector', 'gget_score_vector', 'gget_score_save', 'collate_fn',
-           'collate_fn_v1', 'collate_fn_v2', 'collate_fn_graphv0', 'eval_save', 'good_luck']
+           'fit_shuflle', 'fit_shufllef32', 'gfit_shuflle', 'gfit_shuflle_f32', 'compare_events', 'get_batch_paths',
+           'angular_dist_score', 'get_score', 'get_score_v1', 'get_score_vector', 'gget_score_vector',
+           'gget_score_save', 'collate_fn', 'collate_fn_v1', 'collate_fn_v2', 'collate_fn_graphv0', 'eval_save',
+           'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -745,6 +746,158 @@ def gfit_shuflle(
                 with torch.cuda.amp.autocast():  # half precision
                     out = model(batch)  # forward pass
                     loss = loss_fn(out, batch.y)  # calulation loss
+                val_loss += loss.item()
+
+                gt.append(batch.y.detach())
+                pred.append(out.detach())
+        # calculating metric
+        metric_ = metric(torch.cat(pred), torch.cat(gt))
+        # saving predictions
+        # save_pred_as_csv(
+        #    torch.cat(pred), torch.cat(gt), name=f"{Path(folder)/exp_name}_OOF_{i}.csv"
+        # )
+        # saving model if necessary
+        save_md(metric_, model, i)
+
+        val_loss /= mb.child.total
+
+        wandb.log(
+            {
+                "epoch": i,
+                "train_loss": trn_loss,
+                "valid_loss": val_loss,
+                "metric": metric_,
+                'learning_rate': opt.param_groups[0]['lr']
+            }
+        )
+
+        res = pd.DataFrame(
+            {
+                "epoch": [i],
+                "train_loss": [trn_loss],
+                "valid_loss": [val_loss],
+                "metric": [metric_],
+            }
+        )
+        print(res)
+        res.to_csv(f"{Path(folder)/exp_name}_{i}.csv", index=False)
+        gc.collect()
+    print("Training done")
+    
+    
+def gfit_shuflle_f32(
+    epochs,
+    model,
+    loss_fn,
+    opt,
+    metric,
+    config,
+    folder="models",
+    exp_name="exp_00",
+    device=None,
+    sched=None,
+    save_md=SaveModelEpoch,
+):
+    if device is None:
+        device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
+
+    os.makedirs(folder, exist_ok=True)
+
+    mb = master_bar(range(epochs))
+    mb.write(["epoch", "train_loss", "valid_loss", "val_metric"], table=True)
+    model.to(device)  # we have to put our model on gpu
+    save_md = save_md(folder, exp_name)
+    if config.FILTER:
+        vld_pth = [
+            filter_ds_based_on_kappa(load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet"), i)
+            for i in range(config.VAL_BATCH_RANGE[0], config.VAL_BATCH_RANGE[1])
+        ]
+    else:
+        vld_pth = [
+            load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet")
+            for i in range(config.VAL_BATCH_RANGE[0], config.VAL_BATCH_RANGE[1])
+        ]
+    vld_pth = concatenate_datasets(vld_pth)
+
+    vld_ds = config.VAL_DATASET(vld_pth)
+
+    valid_dl = gDataLoader(
+        vld_ds,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        num_workers=config.NUM_WORKERS,
+        pin_memory=True,
+        persistent_workers=config.PRESISTENT_WORKERS,
+    )
+
+    wandb.init(
+        project="ice",
+        entity="kaggle-hi",
+        name=config.EXP_NAME,
+        config=get_config_as_dict(config),
+    )
+    wandb.watch(model)
+
+    trn_batch_range = cycle(config.TRN_BATCH_RANGE)
+    for i in mb:  # iterating  epoch
+        trn_loss, val_loss = 0.0, 0.0
+        # shuffling the data before every epoch cheaper than shuffling the dataloader
+        trn_range = next(trn_batch_range)
+        print(f"trn_range: {trn_range}")
+        nums = [i for i in range(trn_range[0], trn_range[1])]
+        random.shuffle(nums)
+        if config.FILTER:
+            trn_pth = [
+                filter_ds_based_on_kappa(load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet"), i) for i in nums
+            ]
+            
+        else:
+            trn_pth = [
+                load_from_disk(config.DATA_CACHE_DIR / f"batch_{i}.parquet") for i in nums
+            ]
+
+        trn_pth = concatenate_datasets(trn_pth)
+        trn_ds = config.TRN_DATASET(trn_pth)
+
+        train_dl = gDataLoader(
+            trn_ds,
+            batch_size=config.BATCH_SIZE,
+            shuffle=False,
+            num_workers=config.NUM_WORKERS,
+            pin_memory=True,
+            persistent_workers=config.PRESISTENT_WORKERS,
+        )
+
+        trn_n, val_n = len(train_dl.dataset), len(valid_dl.dataset)
+        model.train()  # set model for training
+        for batch in progress_bar(train_dl, parent=mb):
+            # putting batches to device
+            opt.zero_grad()  # zeroing optimizer
+            batch = batch.to(device)
+
+            out = model(batch)  # forward pass
+            loss = loss_fn(out, batch.y)  # calulation loss
+            trn_loss += loss.item()
+
+            loss.backward()  # backward
+            opt.step()  # optimzers step
+            if sched is not None:
+                sched.step()  # scuedular step
+
+        trn_loss /= mb.child.total
+
+        # putting model in eval mode
+        model.eval()
+        gt = []
+        pred = []
+        # after epooch is done we can run a validation dataloder and see how are doing
+        with torch.no_grad():
+            for batch in progress_bar(valid_dl, parent=mb):
+                batch = batch.to(device)
+                out = model(batch)  # forward pass
+                loss = loss_fn(out, batch.y)  # calulation loss
                 val_loss += loss.item()
 
                 gt.append(batch.y.detach())
