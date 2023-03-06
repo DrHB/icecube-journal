@@ -47,6 +47,7 @@ from icecube.models import (
     EncoderWithDirectionReconstructionV4,
     EncoderWithDirectionReconstructionV5,
     EncoderWithDirectionReconstructionV7,
+    EncoderWithDirectionReconstructionV8,
     IceCubeModelEncoderSensorEmbeddinng,
     IceCubeModelEncoderSensorEmbeddinngV1,
     IceCubeModelEncoderSensorEmbeddinngV2,
@@ -76,6 +77,7 @@ from icecube.modelsgraph import (
     gVonMisesFisher3DLossEcludeLoss,
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
+    PytorchEGNNV0
 )
 from icecube.graphdataset import (
     GraphDasetV0,
@@ -103,6 +105,7 @@ from icecube.utils import (
     fit_shufllef32,
 )
 from torch import nn
+from icecube.maximdataset import get_dataloaders
 
 
 class BASELINE_HF:
@@ -1082,8 +1085,60 @@ class BASELINE_graph_V14_FT(BASELINE_graph_V5):
     WD = 0.05
     N_FILES = 50
     WARM_UP_PCT = 0.01
+    
+    
+class BASELINE_graph_25_FT_2(BASELINE_graph_V5):
+    MODEL_WTS = '/opt/slh/icecube/RESULTS/EXP_25_FT/EXP_25_FT_3.pth'
+    EXP_NAME = "EXP_25_FT_2"
+    FILTER = False
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = DynEdgeV1
+    FIT_FUNC = gfit_shuflle
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = [
+        [101, 151],
+        [1, 51],
+        [151, 201],
+        [251, 301],
+        [201, 251],
+        [301, 351],
+        [401, 451],
+        [351, 401],
+        [451, 501],
+        [551, 601],
+        [601, 651],
+        [501, 551],
+        [51, 101],
+    ]
+    EPOCHS = 26
+    DEVICE = "cuda:0"
+    BATCH_SIZE = 1024
+    VAL_BATCH_RANGE = (655, 660)
+    LR = 1e-4
+    WD = 0.05
+    N_FILES = 50
+    WARM_UP_PCT = 0.01
 
 
+class FA_GRAPH_V0():
+    MD_WTS = '/opt/slh/icecube/Iafoss/models/model.pth'
+    FOLDER = Path("RESULTS")
+    EXP_NAME = "FA_GRAPH_V0"
+    BS = 512
+    L = 196
+    LR = 5e-4/10
+    WD = 0.05
+    DATALOADER_FUNC = get_dataloaders
+    NUM_WORKERS = 12
+    MODEL_NAME = EncoderWithDirectionReconstructionV8
+    EPOCHS = 8
+    GR_CLIP = 1.0
+    N_ACC = 4
+    PCT_START = 0.01
+    
 
 
 # class BASELINE_HF_V11(BASELINE_HF_V4):

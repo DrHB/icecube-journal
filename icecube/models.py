@@ -716,13 +716,13 @@ class SinusoidalPosEmb(nn.Module):
     
     
 class ExtractorV0(nn.Module):
-    def __init__(self, dim_base=128, dim=384):
+    def __init__(self, dim_base=128, dim=384, proj = True):
         super().__init__()
         self.emb = SinusoidalPosEmb(dim=dim_base)
         self.emb2 = SinusoidalPosEmb(dim=dim_base//2)
         self.aux_emb = nn.Embedding(2,dim_base//2)
         self.qe_emb = nn.Embedding(2,dim_base//2)
-        self.proj = nn.Linear(dim_base*7,dim)
+        self.proj = nn.Linear(dim_base*7,dim) if proj else nn.Identity()
         
     def forward(self, x, Lmax=None):
         pos = x['pos'] if Lmax is None else x['pos'][:,:Lmax]
@@ -924,9 +924,9 @@ class EncoderWithDirectionReconstructionV8(nn.Module):
                                 heads=heads,
                                 ff_glu = True,
                                 rel_pos_bias = True, 
-                                layer_dropout = 0.05, 
-                                attn_dropout = 0.05,    
-                                ff_dropout = 0.05)   
+                                layer_dropout = 0.01, 
+                                attn_dropout = 0.01,    
+                                ff_dropout = 0.01)   
         )
         
         self.cls_token = nn.Linear(dim_out,1,bias=False)
@@ -951,15 +951,13 @@ class EncoderWithDirectionReconstructionV8(nn.Module):
             
     def forward(self, batch):
         mask = batch["mask"]
-        Lmax = mask.sum(-1).max()
-        x = self.fe(batch, Lmax-1)
-        
+        x = self.fe(batch, mask.sum(-1).max())
         bs = x.shape[0]
         cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
         x = torch.cat([cls_token,x],1)
         mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
-        x = x[:,:Lmax]
-        mask = mask[:,:Lmax]
+        x = x[:,:mask.sum(-1).max()]
+        mask = mask[:,:mask.sum(-1).max()]
         x = self.encoder(x, mask=mask)
         x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask), x[:, 0]], dim=1)
         return self.out(x)
@@ -1183,8 +1181,8 @@ class MATMaskedPool(nn.Module):
         dim_out,
         depth,
         heads=8,
-        Lg=0.5,
-        Ld=0.5,
+        Lg=1.0,
+        Ld=1.0,
         La=1,
         dist_kernel_fn="exp",
     ):
