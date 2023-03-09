@@ -58,8 +58,8 @@
 |EXP_39_FT|`1.000009`|FT `EXP_39_FT` no improvent loss fluctuates...| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT` |`cycle`|
 |EXP_39_FT_2|`1.000009`|FT `EXP_39_FT_2` no improvent loss fluctuates...| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT_2` |`cycle`|
 |EXP_40||combining `EXP_25` with Transformer , GNN->Transformer, added residual connection, concat features after GNN and also after Pool, with transformer| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT_2` |`cycle`|
-|EXP_100||combining `DynNet` with Transformer , GNN->transformers, I am taking orignal GNN that has cv of `0.99` (its 4 layers) freezing it and using it as feature extractor and feeding to to transformer. Transformer has `cls_token_pooling`, `6` encoder layers. |!CUDA_VISIBLE_DEVICES=0 python train.py --config_name EXP_100` |`cycle`|
-|EXP_101||similar to `EXP_100` but I am encoding `charge`, `qe`, `aux`, `ice_properties`, concat with original `xyzt` and feeding to 1 layer graphnet (i am not encoding `xyzt`), because i need them for building edges, after this everything get fed to `10` layer transformer `encoder` , I also modified `max_events` we give priority to `aux` and then sort by `time`|!CUDA_VISIBLE_DEVICES=0 python train.py --config_name EXP_101` |`cycle`|
+|EXP_100||combining `DynNet` with Transformer , GNN->transformers, I am taking orignal GNN that has cv of `0.99` (its 4 layers) freezing it and using it as feature extractor and feeding to to transformer. Transformer has `cls_token_pooling`, `6` encoder layers. `12` gradd accumulation |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name EXP_100` |`cycle`|
+|EXP_101||similar to `EXP_100` but I am encoding `charge`, `qe`, `aux`, `ice_properties`, concat with original `xyzt` and feeding to 1 layer graphnet (i am not encoding `xyzt`), because i need them for building edges, after this everything get fed to `10` layer transformer `encoder` , I also modified `max_events` we give priority to `aux` and then sort by `time`, `12` gradd accumulation |`!CUDA_VISIBLE_DEVICES=0 python train.py --config_name EXP_101` |`cycle`|
 
 
 
