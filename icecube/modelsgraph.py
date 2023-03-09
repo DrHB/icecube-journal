@@ -10,9 +10,9 @@ __all__ = ['loss_fn_azi', 'loss_fn_zen', 'GLOBAL_POOLINGS', 'MeanPoolingWithMask
            'SinusoidalPosEmb', 'gExtractorV1', 'EGNNModelV10', 'EGNNModelV11', 'PytorchEGNNV0', 'PoolingWithMask',
            'EncoderWithDirectionReconstructionX', 'EncoderWithDirectionReconstructionX1',
            'EncoderWithDirectionReconstructionX2', 'GraphxTransformerV0', 'GraphxTransformerV1', 'GraphxTransformerV2',
-           'GraphxTransformerV3', 'GraphxTransformerV4']
+           'GraphxTransformerV3', 'GraphxTransformerV4', 'gExtractorV0', 'GraphxTransformerV5']
 
-# %% ../nbs/02_modelsgraph.ipynb 1
+# %% ../nbs/02_modelsgraph.ipynb 2
 import sys
 sys.path.append('/opt/slh/archive/software/graphnet/src')
 sys.path.append('/opt/slh/icecube/')
@@ -44,9 +44,9 @@ import torch.nn.functional as F
 from .graphdataset import add_features_to_batch
 from einops import rearrange
 from .models import ExtractorV0
+from .models import SinusoidalPosEmb
 
-
-# %% ../nbs/02_modelsgraph.ipynb 4
+# %% ../nbs/02_modelsgraph.ipynb 5
 class MeanPoolingWithMask(nn.Module):
     def __init__(self):
         super(MeanPoolingWithMask, self).__init__()
@@ -110,7 +110,7 @@ class EncoderWithReconstructionLossV0(nn.Module):
         zn = self.zn(x)
         return torch.concat([az, zn], 1)
 
-# %% ../nbs/02_modelsgraph.ipynb 8
+# %% ../nbs/02_modelsgraph.ipynb 9
 class EuclideanDistanceLossG(torch.nn.Module):
     def __init__(self, eps=1e-6, reduction='mean'):
         super().__init__()
@@ -2862,7 +2862,7 @@ class EncoderWithDirectionReconstructionX1(nn.Module):
     
 from timm.models.layers import drop_path, to_2tuple, trunc_normal_
 class EncoderWithDirectionReconstructionX2(nn.Module):
-    def __init__(self, dim_in=151, dim_out=196, max_seq_len=256):
+    def __init__(self, dim_in=151, dim_out=196, max_seq_len=256, depth = 6, heads=8):
         super().__init__()
         self.encoder = ContinuousTransformerWrapper(
             dim_out=dim_out,
@@ -2871,8 +2871,8 @@ class EncoderWithDirectionReconstructionX2(nn.Module):
             use_abs_pos_emb = False, 
             emb_dropout = 0.1, 
             attn_layers=Encoder(dim=dim_out,
-                                depth=6,
-                                heads=8,
+                                depth=depth,
+                                heads=heads,
                                 rel_pos_bias = True, 
                                 deepnorm = True,
                                 layer_dropout = 0.1,
@@ -3028,6 +3028,65 @@ class GraphxTransformerV4(torch.nn.Module):
         self.load_state_dict(torch.load('/opt/slh/icecube/RESULTS/EXP_25_FT/EXP_25_FT_3.pth'), strict=False,)
 
     def forward(self, data):
+        seq_feat, pooled_features, _, batch = self.encoder(data)  # (n,) -> (n, d)
+        seq_feat, mask = to_dense_batch(seq_feat, batch)
+        out = self.transformer({"event": seq_feat, "mask": mask, 'pool_features': pooled_features})
+        return out
+
+# %% ../nbs/02_modelsgraph.ipynb 10
+class gExtractorV0(nn.Module):
+    def __init__(self, dim_base=128, dim=128-4, proj = True):
+        super().__init__()
+        self.emb = SinusoidalPosEmb(dim=dim_base)
+        self.emb2 = SinusoidalPosEmb(dim=dim_base//2)
+        self.aux_emb = nn.Embedding(2,dim_base//2)
+        self.qe_emb = nn.Embedding(2,dim_base//2)
+        self.proj = nn.Linear(dim_base*3,dim) if proj else nn.Identity()
+        
+    def forward(self, batch, Lmax=None):
+        charge =batch.x[:, 4] #charge
+        auxiliary = batch['aux']
+        qe = batch['qe']
+        ice_properties = batch.x[:, -2:]
+        
+        x = torch.cat([self.emb(40*charge),
+                       self.aux_emb(auxiliary),
+                       self.qe_emb(qe),
+                       self.emb2(50*ice_properties).flatten(-2)],-1)
+        x = self.proj(x)
+        return x
+    
+class GraphxTransformerV5(torch.nn.Module):
+    def __init__(
+        
+        self,
+        nb_inputs=9
+    ):
+        super().__init__()
+
+        # Embedding lookup for initial node features
+        self.fe = gExtractorV0()
+        self.encoder = DynEdgeFEV2(
+            nb_inputs=128,
+            nb_neighbours=8,
+            global_pooling_schemes=["min", "max", "mean", "sum"],
+            features_subset=slice(0, 3),  # NN search using xyz3
+            dynedge_layer_sizes = [
+                (
+                    128,
+                    256,
+                )]
+        )
+        
+        self.transformer = EncoderWithDirectionReconstructionX2(256, 256, depth=10)
+
+
+    def forward(self, data):
+        #this embeds the charge, auxiliary, qe, and ice properties
+        embed_features = self.fe(data)
+        #we concat the embeded features to the data (x, y, z, y)
+        #since we dont want to mess around with graph network feature calculation based on xyzt
+        data.x = torch.concat([data.x[:, :4], embed_features], dim=-1) 
         seq_feat, pooled_features, _, batch = self.encoder(data)  # (n,) -> (n, d)
         seq_feat, mask = to_dense_batch(seq_feat, batch)
         out = self.transformer({"event": seq_feat, "mask": mask, 'pool_features': pooled_features})

@@ -75,6 +75,7 @@ from icecube.modelsgraph import (
     GraphxTransformerV2,
     GraphxTransformerV3,
     GraphxTransformerV4,
+    GraphxTransformerV5,
     gVonMisesFisher3DLossEcludeLoss,
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
@@ -86,7 +87,8 @@ from icecube.graphdataset import (
     GraphDasetV3,
     GraphDasetV4,
     GraphDasetV5,
-    GraphDasetV6
+    GraphDasetV6,
+    GraphDasetV7,
 )
 
 from icecube.utils import (
@@ -1186,6 +1188,29 @@ class EXP_100:
     BETA1 = 0.9
     BETA2= 0.95
     MODEL = GraphxTransformerV4
+    SCHEDULER = get_cosine_schedule_with_warmup
+    
+    
+class EXP_101:
+    FOLDER = Path('/opt/slh/icecube/RESULTS')
+    DATA_CACHE_DIR = Path("/opt/slh/icecube/data/hf_cashe")
+    EXP_NAME = "EXP_100"
+    TRN_BATCH_RANGE = (1, 650)
+    VAL_BATCH_RANGE = (655, 656)
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV7
+    VAL_DATASET = GraphDasetV7
+    BATCH_SIZE = 1024
+    NUM_WORKERS = 22
+    PRESISTENT_WORKERS = True
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    MAX_LR = 5e-4
+    WD = 0.1
+    GRADIEN_ACCUMULATION_STEPS = 12
+    WARMUP_STEPS = 1000
+    BETA1 = 0.9
+    BETA2= 0.95
+    MODEL = GraphxTransformerV5
     SCHEDULER = get_cosine_schedule_with_warmup
 
 # class BASELINE_HF_V11(BASELINE_HF_V4):
