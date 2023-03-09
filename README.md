@@ -58,18 +58,8 @@
 |EXP_39_FT|`1.000009`|FT `EXP_39_FT` no improvent loss fluctuates...| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT` |`cycle`|
 |EXP_39_FT_2|`1.000009`|FT `EXP_39_FT_2` no improvent loss fluctuates...| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT_2` |`cycle`|
 |EXP_40||combining `EXP_25` with Transformer , GNN->Transformer, added residual connection, concat features after GNN and also after Pool, with transformer| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_graph_V13_FT_2` |`cycle`|
+|EXP_100||combining `DynNet` with Transformer , GNN->transformers, I am taking orignal GNN that has cv of `0.99` freezing it and using it as feature extractor and feeding to to transformer. Transformer has `cls_token_pooling`, `6` encoder layers. |!CUDA_VISIBLE_DEVICES=0 python train.py --config_name EXP_100` |`cycle`|
 
 
 
-#### This set of experiment done on fa pipline using maxim training which uses one_cycle, and gradient accumulation and len match smapler
-| Notebook Name | SCORE     | DESCRIPTION                                                                                                                        | SCRIPT                                        | TRN_SET |
-| :------- | :-------- | :--------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------- |:-------------------------------------------- |
-| init5_hb_ft-2.ipynb  | ~ | `EncoderWithDirectionReconstructionV8`, uses ralitive possition baise with scaling,  `dim_out=256`, `attn_depth` = `8`, `heads` = `12` , `layer_dropout = 0.01`, `attn_dropout = 0.01`, ` ff_dropout = 0.01` | - | `full` |
-| init5_dynedge  | ~ | training `DynEdgeV3` on new pipline, trying to see if I can get better score then this `EXP_25_FT`  | - | `full` |
-
-
-datasets version `'2.8.0'`
-```python
-#embeding dimension changed from 150 to 196 for transformer ecnoder
-```
 

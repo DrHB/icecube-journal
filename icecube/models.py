@@ -12,8 +12,9 @@ __all__ = ['DIST_KERNELS', 'EuclideanDistanceLossG', 'VonMisesFisher3DLossCosine
            'EncoderWithDirectionReconstructionV3', 'EncoderWithDirectionReconstructionV4',
            'EncoderWithDirectionReconstructionV5', 'SinusoidalPosEmb', 'ExtractorV0', 'ExtractorV1', 'ExtractorV2',
            'EncoderWithDirectionReconstructionV6', 'EncoderWithDirectionReconstructionV7',
-           'EncoderWithDirectionReconstructionV8', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
-           'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked']
+           'EncoderWithDirectionReconstructionV8', 'EncoderWithDirectionReconstructionV9', 'exists', 'default',
+           'Residual', 'PreNorm', 'FeedForwardV1', 'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT',
+           'IceCubeModelEncoderMATMasked']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -963,8 +964,58 @@ class EncoderWithDirectionReconstructionV8(nn.Module):
         return self.out(x)
 
 
+class EncoderWithDirectionReconstructionV9(nn.Module):
+    def __init__(self, dim_out=256, attn_depth = 10, heads = 12):
+        super().__init__()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_out=dim_out,
+            max_seq_len=300,
+            post_emb_norm = True,
+            use_abs_pos_emb = False, 
+            emb_dropout = 0.1, 
+            attn_layers=Encoder(dim=dim_out,
+                                depth=attn_depth,
+                                heads=heads,
+                                use_rmsnorm = True,
+                                ff_glu = True,
+                                alibi_pos_bias = True, 
+                                alibi_num_heads = 4 ,  
+                                layer_dropout = 0.01, 
+                                attn_dropout = 0.01,    
+                                ff_dropout = 0.01)   
+        )
+        
+        self.cls_token = nn.Linear(dim_out,1,bias=False)  
+        self.out = nn.Linear(dim_out, 3)
+        self.fe = ExtractorV0(dim=dim_out, dim_base=96)
+        self.apply(self._init_weights)
+        trunc_normal_(self.cls_token.weight, std=.02)
+        #torch.nn.init.trunc_normal_(self.cls_token, std=0.02)
 
-# %% ../nbs/01_models.ipynb 14
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
+    def forward(self, batch):
+        mask = batch["mask"]
+        x = self.fe(batch, mask.sum(-1).max())
+        bs = x.shape[0]
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = x[:,:mask.sum(-1).max()]
+        mask = mask[:,:mask.sum(-1).max()]
+        x = self.encoder(x, mask=mask)
+        x = x[:, 0]
+        return self.out(x)
+
+
+# %% ../nbs/01_models.ipynb 13
 # MOLECULAR TRANFORMER
 DIST_KERNELS = {
     "exp": {

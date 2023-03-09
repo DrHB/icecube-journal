@@ -177,3 +177,14 @@ RESULTS/*
 GPU_training.ipynb
 EDA/test
 wandb/*
+hb_training_loop/wandb/*
+hb_training_loop/wandb
+*.json
+*.patch
+*.yaml
+*.wandb
+hb_training_loop/wandb/latest-run
+Iafoss/init5_dynedge.ipynb
+Iafoss/init5_hb_ft-2.ipynb
+.gitignore
+Iafoss/*

@@ -74,6 +74,7 @@ from icecube.modelsgraph import (
     GraphxTransformerV1,
     GraphxTransformerV2,
     GraphxTransformerV3,
+    GraphxTransformerV4,
     gVonMisesFisher3DLossEcludeLoss,
     gVonMisesFisher3DLoss,
     gVonMisesFisher3DLossCosineSimularityLoss,
@@ -1140,6 +1141,52 @@ class FA_GRAPH_V0():
     PCT_START = 0.01
     
 
+
+class TRN_ACCELERATE_V0():
+    FOLDER = Path('RESULTS')
+    DATA_CACHE_DIR = Path("data/hf_cashe")
+    EXP_NAME = "EXP_40_ACCELERATE"
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    NUM_WORKERS = 22
+    MODEL_NAME = DynEdgeV1
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    TRN_BATCH_RANGE = (1, 10)
+    VAL_BATCH_RANGE = (655, 660)
+    EPOCHS = 1
+    DEVICE = "cuda:0"
+    BATCH_SIZE = 1024
+    LR = 1e-3
+    WD = 1e-4
+    SCHEDULER = get_cosine_schedule_with_warmup
+    OPT = torch.optim.AdamW
+    GRAD_ACC_STEPS = 4
+    PRESISTENT_WORKERS = True
+    COLLAT_FN = None
+    
+    
+class EXP_100:
+    FOLDER = Path('/opt/slh/icecube/RESULTS')
+    DATA_CACHE_DIR = Path("/opt/slh/icecube/data/hf_cashe")
+    EXP_NAME = "EXP_100"
+    TRN_BATCH_RANGE = (1, 650)
+    VAL_BATCH_RANGE = (655, 656)
+    METRIC = gget_score_vector
+    TRN_DATASET = GraphDasetV0
+    VAL_DATASET = GraphDasetV0
+    BATCH_SIZE = 768
+    NUM_WORKERS = 22
+    PRESISTENT_WORKERS = True
+    LOSS_FUNC = gVonMisesFisher3DLoss
+    MAX_LR = 5e-4
+    WD = 0.1
+    GRADIEN_ACCUMULATION_STEPS = 12
+    WARMUP_STEPS = 1000
+    BETA1 = 0.9
+    BETA2= 0.95
+    MODEL = GraphxTransformerV4
+    SCHEDULER = get_cosine_schedule_with_warmup
 
 # class BASELINE_HF_V11(BASELINE_HF_V4):
 #    EXP_NAME = "EXP_21"

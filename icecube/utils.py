@@ -3,10 +3,10 @@
 # %% auto 0
 __all__ = ['label_to_df', 'get_size', 'reduce_mem_usage', 'get_config_as_dict', 'save_folder', 'save_pred_as_csv',
            'filter_ds_based_on_kappa', 'SaveModel', 'SaveModelMetric', 'SaveModelEpoch', 'fit', 'LenMatchBatchSampler',
-           'fit_shuflle', 'fit_shufllef32', 'gfit_shuflle', 'gfit_shuflle_f32', 'compare_events', 'get_batch_paths',
-           'angular_dist_score', 'get_score', 'get_score_v1', 'get_score_vector', 'gget_score_vector',
-           'gget_score_save', 'collate_fn', 'collate_fn_v1', 'collate_fn_v2', 'collate_fn_graphv0', 'eval_save',
-           'good_luck']
+           'fit_shuflle', 'fit_shufllef32', 'AverageMeter', 'asMinutes', 'timeSince', 'gfit_shuflle',
+           'gfit_shuflle_f32', 'compare_events', 'get_batch_paths', 'angular_dist_score', 'get_score', 'get_score_v1',
+           'get_score_vector', 'gget_score_vector', 'gget_score_save', 'collate_fn', 'collate_fn_v1', 'collate_fn_v2',
+           'collate_fn_graphv0', 'eval_save', 'good_luck']
 
 # %% ../nbs/00_utils.ipynb 1
 import numpy as np
@@ -625,7 +625,40 @@ def fit_shufllef32(
         gc.collect()
     print("Training done")
     
+import time
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count    
+        
+def asMinutes(s):
+    m = math.floor(s / 60)
+    s -= m * 60
+    return '%dm %ds' % (m, s)
+
+
+def timeSince(since, percent):
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (remain %s)' % (asMinutes(s), asMinutes(rs))
+
     
+
     
 def gfit_shuflle(
     epochs,
@@ -722,16 +755,14 @@ def gfit_shuflle(
                 out = model(batch)  # forward pass
                 loss = loss_fn(out, batch.y)  # calulation loss
 
-            trn_loss += loss.item()
-
             scaler.scale(loss).backward()  # backward
             scaler.unscale_(opt)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.)
             scaler.step(opt)  # optimzers step
             scaler.update()  # for half precision
-            opt.zero_grad()  # zeroing optimizer
-            if sched is not None:
-                sched.step()  # scuedular step
+            opt.zero_grad(set_to_none=True)  # zeroing optimizer
+            sched.step()  # scuedular step
+            trn_loss += loss.item()
 
         trn_loss /= mb.child.total
 

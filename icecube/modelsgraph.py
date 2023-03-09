@@ -8,8 +8,9 @@ __all__ = ['loss_fn_azi', 'loss_fn_zen', 'GLOBAL_POOLINGS', 'MeanPoolingWithMask
            'EGNNLayer', 'EGNNLayerKNN', 'EGNNModel', 'EGNNModelV2', 'FeedForward', 'EGNNModelV3', 'EGNNModelV4',
            'EGNNModelV5', 'EGNNModelV6', 'TokenEmbeddingV2', 'EGNNModelV7', 'EGNNModelV8', 'EGNNModelV9', 'l2norm',
            'SinusoidalPosEmb', 'gExtractorV1', 'EGNNModelV10', 'EGNNModelV11', 'PytorchEGNNV0', 'PoolingWithMask',
-           'EncoderWithDirectionReconstructionX', 'EncoderWithDirectionReconstructionX1', 'GraphxTransformerV0',
-           'GraphxTransformerV1', 'GraphxTransformerV2', 'GraphxTransformerV3']
+           'EncoderWithDirectionReconstructionX', 'EncoderWithDirectionReconstructionX1',
+           'EncoderWithDirectionReconstructionX2', 'GraphxTransformerV0', 'GraphxTransformerV1', 'GraphxTransformerV2',
+           'GraphxTransformerV3', 'GraphxTransformerV4']
 
 # %% ../nbs/02_modelsgraph.ipynb 1
 import sys
@@ -2818,7 +2819,7 @@ class EncoderWithDirectionReconstructionX(nn.Module):
     
     
 class EncoderWithDirectionReconstructionX1(nn.Module):
-    def __init__(self, dim_in=151, dim_out=196, max_seq_len=256):
+    def __init__(self, dim_in=151, dim_out=196, max_seq_len=256, depth = 6, heads=8):
         super().__init__()
         self.encoder = ContinuousTransformerWrapper(
             dim_in=dim_in,
@@ -2826,8 +2827,8 @@ class EncoderWithDirectionReconstructionX1(nn.Module):
             max_seq_len=max_seq_len,
             post_emb_norm = True,
             attn_layers=Encoder(dim=dim_out,
-                                depth=6,
-                                heads=8,
+                                depth=depth,
+                                heads=heads,
                                 ff_glu = True,
                                 rel_pos_bias = True, 
                                 layer_dropout = 0.01, 
@@ -2859,6 +2860,43 @@ class EncoderWithDirectionReconstructionX1(nn.Module):
         x = torch.concat([self.pool_mean(x, mask), self.pool_max(x, mask), pooled_features], dim=1)
         return self.out(x)
     
+from timm.models.layers import drop_path, to_2tuple, trunc_normal_
+class EncoderWithDirectionReconstructionX2(nn.Module):
+    def __init__(self, dim_in=151, dim_out=196, max_seq_len=256):
+        super().__init__()
+        self.encoder = ContinuousTransformerWrapper(
+            dim_out=dim_out,
+            max_seq_len=max_seq_len,
+            post_emb_norm = True,
+            use_abs_pos_emb = False, 
+            emb_dropout = 0.1, 
+            attn_layers=Encoder(dim=dim_out,
+                                depth=6,
+                                heads=8,
+                                rel_pos_bias = True, 
+                                deepnorm = True,
+                                layer_dropout = 0.1,
+                                ff_no_bias = True, 
+                                attn_qk_norm = True,
+                                attn_qk_norm_dim_scale = True)
+        )
+
+        self.cls_token = nn.Linear(dim_out,1,bias=False) 
+        self.out = DirectionReconstructionWithKappa(
+            hidden_size=dim_out + 128,
+            target_labels='direction',
+            loss_function=VonMisesFisher3DLoss(),
+        )
+        trunc_normal_(self.cls_token.weight, std=.02)
+            
+    def forward(self, batch):
+        x, mask, pooled_features, = batch["event"], batch["mask"], batch['pool_features']
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(x.shape[0],-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(x.shape[0], 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        x = torch.concat([x[:, 0], pooled_features], dim=1)
+        return self.out(x)
 
     
 class GraphxTransformerV0(torch.nn.Module):
@@ -2961,6 +2999,33 @@ class GraphxTransformerV3(torch.nn.Module):
         self.transformer = EncoderWithDirectionReconstructionX1(256, 256)
         
         #self.load_state_dict(torch.load('/opt/slh/icecube/RESULTS/EXP_25_FT/EXP_25_FT_3.pth'), strict=False,)
+
+    def forward(self, data):
+        with torch.no_grad():
+            seq_feat, pooled_features, _, batch = self.encoder(data)  # (n,) -> (n, d)
+            seq_feat, mask = to_dense_batch(seq_feat, batch)
+        out = self.transformer({"event": seq_feat, "mask": mask, 'pool_features': pooled_features})
+        return out
+    
+    
+class GraphxTransformerV4(torch.nn.Module):
+    def __init__(
+        
+        self,
+        nb_inputs=9
+    ):
+        super().__init__()
+
+        # Embedding lookup for initial node features
+        self.encoder = DynEdgeFEV2(
+            nb_inputs=9,
+            nb_neighbours=8,
+            global_pooling_schemes=["min", "max", "mean", "sum"],
+            features_subset=slice(0, 3),  # NN search using xyz3
+        )
+        
+        self.transformer = EncoderWithDirectionReconstructionX2(256, 256)
+        self.load_state_dict(torch.load('/opt/slh/icecube/RESULTS/EXP_25_FT/EXP_25_FT_3.pth'), strict=False,)
 
     def forward(self, data):
         seq_feat, pooled_features, _, batch = self.encoder(data)  # (n,) -> (n, d)
