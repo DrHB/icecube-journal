@@ -1468,7 +1468,7 @@ class LocalAttenNetwok(nn.Module):
         dim,
         depth,
         dim_head = 64,
-        heads = 4,
+        heads = 8,
         num_neighbors_cutoff = None,
         attn_dropout = 0.,
     ):
@@ -1640,12 +1640,12 @@ class BeDeepIceModel(nn.Module):
     
     
 class EncoderWithDirectionReconstructionV11(nn.Module):
-    def __init__(self, dim_out=192, attn_depth = 8, heads = 12):
+    def __init__(self, dim_out=256 + 64):
         super().__init__()
         self.fe = ExtractorV0(dim=dim_out, dim_base=96)
         self.encoder = BeDeepIceModel(dim_out)
         self.cls_token = nn.Linear(dim_out,1,bias=False)
-        self.loacl_attn = LocalAttenNetwok(dim = dim_out, depth = 3, num_neighbors_cutoff = 12)
+        self.loacl_attn = LocalAttenNetwok(dim = dim_out, depth = 3, num_neighbors_cutoff = 24)
         trunc_normal_(self.cls_token.weight, std=.02)
 
     def forward(self, batch):
