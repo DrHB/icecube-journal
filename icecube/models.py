@@ -14,7 +14,9 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV6', 'EncoderWithDirectionReconstructionV7',
            'EncoderWithDirectionReconstructionV8', 'EncoderWithDirectionReconstructionV9',
            'EncoderWithDirectionReconstructionV10', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
-           'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked']
+           'Attention', 'MAT', 'MATMaskedPool', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked',
+           'batched_index_select', 'AdjacentMatrixAttentionNetwork', 'LocalAttenNetwok', 'BeDropPath', 'BeMLP',
+           'BeBlock', 'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -36,6 +38,9 @@ from graphnet.training.loss_functions import VonMisesFisher3DLoss,  VonMisesFish
 from graphnet.training.labels import Direction
 from .modelsgraph import EGNNModeLFEAT
 from torch_geometric.nn.pool import knn_graph
+import torch.utils.checkpoint as checkpoint
+from einops import repeat
+from torch_geometric.utils import to_dense_adj
 
 
 # %% ../nbs/01_models.ipynb 2
@@ -1066,7 +1071,6 @@ class EncoderWithDirectionReconstructionV10(nn.Module):
 
 
 # %% ../nbs/01_models.ipynb 13
-# MOLECULAR TRANFORMER
 DIST_KERNELS = {
     "exp": {
         "fn": lambda t: torch.exp(-t),
@@ -1374,4 +1378,290 @@ class IceCubeModelEncoderMATMasked(nn.Module):
     def forward(self, batch):
         return self.md(batch)
 
+
+# helpers
+
+def exists(val):
+    return val is not None
+
+def batched_index_select(values, indices):
+    last_dim = values.shape[-1]
+    return values.gather(1, indices[:, :, None].expand(-1, -1, last_dim))
+
+
+class FeedForward(nn.Module):
+    def __init__(self, dim, mult = 4, dropout = 0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, dim * mult),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(dim * mult, dim)
+        )
+
+    def forward(self, x, **kwargs):
+        return self.net(x)
+
+
+class AdjacentMatrixAttentionNetwork(nn.Module):
+    def __init__(
+        self,
+        *,
+        dim,
+        dim_head = 64,
+        heads = 4,
+        dropout = 0.
+    ):
+        super().__init__()
+        inner_dim = dim_head * heads
+        self.scale = dim_head ** -0.5
+        self.heads = heads
+
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
+        self.to_out = nn.Linear(inner_dim, dim)
+
+        self.null_k = nn.Parameter(torch.randn(heads, dim_head))
+        self.null_v = nn.Parameter(torch.randn(heads, dim_head))
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(
+        self,
+        x,
+        adj_kv_indices,
+        mask
+    ):
+        b, n, d, h = *x.shape, self.heads
+        flat_indices = repeat(adj_kv_indices, 'b n a -> (b h) (n a)', h = h)
+
+        q, k, v = self.to_qkv(x).chunk(3, dim = -1)
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
+
+        k, v = map(lambda t: rearrange(t, 'b h n d -> (b h) n d'), (k, v))
+        k = batched_index_select(k, flat_indices)
+        v = batched_index_select(v, flat_indices)
+        k, v = map(lambda t: rearrange(t, '(b h) (n a) d -> b h n a d', h = h, n = n), (k, v))
+
+        nk, nv = map(lambda t: rearrange(t, 'h d -> () h () () d').expand(b, -1, n, 1, -1), (self.null_k, self.null_v))
+        k = torch.cat((nk, k), dim = -2)
+        v = torch.cat((nv, v), dim = -2)
+        mask = F.pad(mask, (1, 0), value = 1)
+
+        sim = einsum('b h n d, b h n a d -> b h n a', q, k) * self.scale
+
+        mask_value = -torch.finfo(sim.dtype).max
+        mask = rearrange(mask.bool(), 'b n a -> b () n a')
+        sim.masked_fill_(~mask.bool(), mask_value)
+
+        attn = sim.softmax(dim = -1)
+        attn = self.dropout(attn)
+
+        out = einsum('b h n a, b h n a d -> b h n d', attn, v)
+        out = rearrange(out, 'b h n d -> b n (h d)')
+
+        return self.to_out(out)
+
+
+class LocalAttenNetwok(nn.Module):
+    def __init__(
+        self,
+        dim,
+        depth,
+        dim_head = 64,
+        heads = 4,
+        num_neighbors_cutoff = None,
+        attn_dropout = 0.,
+    ):
+        super().__init__()
+        self.num_neighbors_cutoff = num_neighbors_cutoff
+        self.layers = nn.ModuleList([])
+
+        for _ in range(depth):
+            global_attn = None
+            self.layers.append(nn.ModuleList([
+                Residual(PreNorm(dim, AdjacentMatrixAttentionNetwork(
+                    dim = dim,
+                    dim_head = dim_head,
+                    heads = heads,
+                    dropout = attn_dropout
+                ))),
+                global_attn,
+            ]))
+
+    def forward(self, x, adjacency_mat, mask = None):
+        device, n = x.device, x.shape[1]
+
+        diag = torch.eye(adjacency_mat.shape[-1], device = device).bool()
+        adjacency_mat |= diag
+        if exists(mask):
+            adjacency_mat &= (mask[:, :, None] * mask[:, None, :])
+
+        adj_mat = adjacency_mat.float()
+        max_neighbors = int(adj_mat.sum(dim = -1).max())
+
+        if exists(self.num_neighbors_cutoff) and max_neighbors > self.num_neighbors_cutoff:
+            noise = torch.empty((n, n), device = device).uniform_(-0.01, 0.01)
+            adj_mat = adj_mat + noise
+            adj_mask, adj_kv_indices = adj_mat.topk(dim = -1, k = self.num_neighbors_cutoff)
+            adj_mask = (adj_mask > 0.5).float()
+        else:
+            adj_mask, adj_kv_indices = adj_mat.topk(dim = -1, k = max_neighbors)
+        for attn, _ in self.layers:
+            x = attn(
+                x,
+                adj_kv_indices = adj_kv_indices,
+                mask = adj_mask
+            )
+
+
+        return x
+
+
+class BeDropPath(nn.Module):
+    def __init__(self, drop_prob=None):
+        super(BeDropPath, self).__init__()
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        return drop_path(x, self.drop_prob, self.training)
+    
+    def extra_repr(self) -> str:
+        return 'p={}'.format(self.drop_prob)
+    
+class BeMLP(nn.Module):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        # x = self.drop(x)
+        # commit this for the orignal BERT implement 
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
+
+#BEiTv2 Beblock
+class BeBlock(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+                 drop_path=0., init_values=None, act_layer=nn.GELU, norm_layer=nn.LayerNorm,
+                 window_size=None, attn_head_dim=None, **kwargs):
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.attn = nn.MultiheadAttention(dim, num_heads, dropout=drop, batch_first=True)
+        self.drop_path = BeDropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.norm2 = norm_layer(dim)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = BeMLP(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+
+        if init_values is not None:
+            self.gamma_1 = nn.Parameter(init_values * torch.ones((dim)),requires_grad=True)
+            self.gamma_2 = nn.Parameter(init_values * torch.ones((dim)),requires_grad=True)
+        else:
+            self.gamma_1, self.gamma_2 = None, None
+
+    def forward(self, x, attn_mask=None, key_padding_mask=None):
+        if self.gamma_1 is None:
+            xn = self.norm1(x)
+            x = x + self.drop_path(self.attn(xn,xn,xn,
+                            attn_mask=attn_mask,
+                            key_padding_mask=key_padding_mask,
+                            need_weights=False)[0])
+            x = x + self.drop_path(self.mlp(self.norm2(x)))
+        else:
+            xn = self.norm1(x)
+            x = x + self.drop_path(self.gamma_1 * self.drop_path(self.attn(xn,xn,xn,
+                            attn_mask=attn_mask,
+                            key_padding_mask=key_padding_mask,
+                            need_weights=False)[0]))
+            x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
+        return x
+
+
+class BeDeepIceModel(nn.Module):
+    def __init__(self, dim=384, depth=12, use_checkpoint=False, **kwargs):
+        super().__init__()
+        self.Beblocks = nn.ModuleList([ 
+            BeBlock(
+                dim=dim, num_heads=dim//64, mlp_ratio=4, drop_path=0, init_values=1,)
+            for i in range(depth)])
+        #self.Beblocks = nn.ModuleList([ 
+        #    nn.TransformerEncoderLayer(dim,dim//64,dim*4,dropout=0,
+        #        activation=nn.GELU(), batch_first=True, norm_first=True)
+        #    for i in range(depth)])
+
+        self.proj_out = nn.Linear(dim,3)
+        self.use_checkpoint = use_checkpoint
+        self.apply(self._init_weights)
+
+    def fix_init_weight(self):
+        def rescale(param, layer_id):
+            param.div_(math.sqrt(2.0 * layer_id))
+
+        for layer_id, layer in enumerate(self.Beblocks):
+            rescale(layer.attn.proj.weight.data, layer_id + 1)
+            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    def init_weights(self, pretrained=None):
+        def _init_weights(m):
+            if isinstance(m, nn.Linear):
+                trunc_normal_(m.weight, std=.02)
+                if isinstance(m, nn.Linear) and m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.LayerNorm):
+                nn.init.constant_(m.bias, 0)
+                nn.init.constant_(m.weight, 1.0)
+        self.apply(_init_weights)
+    
+    def forward(self, x, mask):
+        attn_mask = torch.zeros(mask.shape, device=mask.device)
+        attn_mask[~mask] = -torch.inf
+        for blk in self.Beblocks:
+            if self.use_checkpoint:
+                x = checkpoint.checkpoint(blk, x, None, attn_mask)
+            else: x = blk(x, None, attn_mask)
+        x = self.proj_out(x[:,0]) #cls token
+        return x
+    
+    
+class EncoderWithDirectionReconstructionV11(nn.Module):
+    def __init__(self, dim_out=192, attn_depth = 8, heads = 12):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out, dim_base=96)
+        self.encoder = BeDeepIceModel(dim_out)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.loacl_attn = LocalAttenNetwok(dim = dim_out, depth = 3, num_neighbors_cutoff = 12)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        pos = batch["pos"][mask] 
+        mask = mask[:,:mask.sum(-1).max()] 
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = knn_graph(x = pos, k=8, batch=batch_index).to(mask.device)
+        adj_matrix = to_dense_adj(edge_index, batch_index).int()
+        x = self.fe(batch, mask.sum(-1).max())
+        x = self.loacl_attn(x, adj_matrix, mask)
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        return x
+    
 

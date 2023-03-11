@@ -26,6 +26,7 @@ from scipy.interpolate import interp1d
 from fastai.vision.all import DataLoaders, OptimWrapper
 from torch_geometric.nn.pool import knn_graph
 import torch.nn.functional as F
+from torch_geometric.utils import to_dense_adj
 
 
 # %% ../nbs/00_maximdataset.ipynb 4
@@ -342,14 +343,14 @@ class IceCubeDataset_len(Dataset):
         return {'mask':mask},{}
     
     
-def dict_to(x, device='cuda'):
+def dict_to(x, device='cpu'):
     return {k:x[k].to(device) for k in x}
 
-def to_device(x, device='cuda'):
+def to_device(x, device='cpu'):
     return tuple(dict_to(e,device) for e in x)
 
 class DeviceDataLoader:
-    def __init__(self, dataloader, device='cuda'):
+    def __init__(self, dataloader, device='cpu'):
         self.dataloader = dataloader
         self.device = device
     
