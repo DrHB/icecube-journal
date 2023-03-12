@@ -1410,7 +1410,7 @@ class AdjacentMatrixAttentionNetwork(nn.Module):
         dim,
         dim_head = 64,
         heads = 4,
-        dropout = 0.
+        dropout = 0.1
     ):
         super().__init__()
         inner_dim = dim_head * heads
@@ -1470,7 +1470,7 @@ class LocalAttenNetwok(nn.Module):
         dim_head = 64,
         heads = 8,
         num_neighbors_cutoff = None,
-        attn_dropout = 0.,
+        attn_dropout = 0.1,
     ):
         super().__init__()
         self.num_neighbors_cutoff = num_neighbors_cutoff
