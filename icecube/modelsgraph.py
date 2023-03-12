@@ -816,16 +816,14 @@ class DynEdgeFEXTRACTRO(GNN):
 
         return global_variables
 
-    def forward(self, data: Data) -> Tensor:
+    def forward(self, x, edge_index, batch, n_pulses) -> Tensor:
         """Apply learnable forward pass."""
         # Convenience variables
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-
         global_variables = self._calculate_global_variables(
             x,
             edge_index,
             batch,
-            torch.log10(data.n_pulses),
+            torch.log10(n_pulses),
         )
 
         # Distribute global variables out to each node
@@ -849,7 +847,7 @@ class DynEdgeFEXTRACTRO(GNN):
 
         # Skip-cat
         x = torch.cat(skip_connections, dim=1)
-
+        x = self._post_processing(x)
         return x, edge_index, batch
     
     

@@ -17,7 +17,7 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'Attention', 'MAT', 'MATMaskedPool', 'MATAdjusted', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked',
            'batched_index_select', 'AdjacentMatrixAttentionNetwork', 'LocalAttenNetwok', 'BeDropPath', 'BeMLP',
            'BeBlock', 'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11',
-           'EncoderWithDirectionReconstructionV12']
+           'EncoderWithDirectionReconstructionV12', 'EncoderWithDirectionReconstructionV13']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -37,7 +37,7 @@ import numpy as np
 from graphnet.models.task.reconstruction import DirectionReconstructionWithKappa, AzimuthReconstructionWithKappa, ZenithReconstruction
 from graphnet.training.loss_functions import VonMisesFisher3DLoss,  VonMisesFisher2DLoss, EuclideanDistanceLoss
 from graphnet.training.labels import Direction
-from .modelsgraph import EGNNModeLFEAT
+from .modelsgraph import EGNNModeLFEAT, DynEdgeFEXTRACTRO
 from torch_geometric.nn.pool import knn_graph
 import torch.utils.checkpoint as checkpoint
 from einops import repeat
@@ -1637,11 +1637,11 @@ class BeBlock(nn.Module):
 
 
 class BeDeepIceModel(nn.Module):
-    def __init__(self, dim=384, depth=12, use_checkpoint=False, **kwargs):
+    def __init__(self, dim=384, depth=12, use_checkpoint=False, drop_b= 0., attn_drop_b = 0.,  **kwargs):
         super().__init__()
         self.Beblocks = nn.ModuleList([ 
             BeBlock(
-                dim=dim, num_heads=dim//64, mlp_ratio=4, drop_path=0, init_values=1, attn_drop=0.1, drop=0.1)
+                dim=dim, num_heads=dim//64, mlp_ratio=4, drop_path=0, init_values=1, attn_drop=attn_drop_b, drop=drop_b)
             for i in range(depth)])
         #self.Beblocks = nn.ModuleList([ 
         #    nn.TransformerEncoderLayer(dim,dim//64,dim*4,dropout=0,
@@ -1736,6 +1736,34 @@ class EncoderWithDirectionReconstructionV12(nn.Module):
         adj_matrix = to_dense_adj(edge_index, batch_index).int()
         x = self.fe(batch, mask.sum(-1).max())
         x = self.loacl_attn(x, adj_matrix, mask)
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        return x
+    
+    
+class EncoderWithDirectionReconstructionV13(nn.Module):
+    def __init__(self, dim_out=256):
+        super().__init__()
+        self.encoder = BeDeepIceModel(dim_out)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.graphnet = DynEdgeFEXTRACTRO(dim_out + 4)
+        self.fe = ExtractorV0(dim=dim_out, dim_base=96)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        xyzt = torch.concat([batch["pos"][mask] , batch['time'][mask].view(-1, 1)], dim=1)
+        mask = mask[:,:mask.sum(-1).max()] 
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = knn_graph(x = xyzt, k=12, batch=batch_index).to(mask.device)
+        x = self.fe(batch, mask.sum(-1).max())
+        x = x[mask]
+        x = torch.cat([x, xyzt], dim=1)
+        x, _, _ = self.graphnet(x, edge_index, batch_index, mask.sum(-1))
+        x, mask = to_dense_batch(x, batch_index)
         cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
         x = torch.cat([cls_token,x],1)
         mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
