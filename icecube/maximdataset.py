@@ -5,7 +5,7 @@ __all__ = ['PATH', 'flatten', 'get_edge_index', 'RandomChunkSampler', 'LenMatchB
            'ice_transparency', 'IceCubeDataset', 'IceCubeDataset_len', 'dict_to', 'to_device', 'DeviceDataLoader',
            'WrapperAdamW', 'get_dataloaders']
 
-# %% ../nbs/00_maximdataset.ipynb 1
+# %% ../nbs/00_maximdataset.ipynb 3
 import polars as pl
 import pandas as pd
 import gc
@@ -28,8 +28,7 @@ from torch_geometric.nn.pool import knn_graph
 import torch.nn.functional as F
 from torch_geometric.utils import to_dense_adj
 
-
-# %% ../nbs/00_maximdataset.ipynb 4
+# %% ../nbs/00_maximdataset.ipynb 6
 PATH = '/opt/slh/icecube/data/'
 
 def flatten(o):
