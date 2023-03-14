@@ -15,9 +15,9 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV8', 'EncoderWithDirectionReconstructionV9',
            'EncoderWithDirectionReconstructionV10', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
            'Attention', 'MAT', 'MATMaskedPool', 'MATAdjusted', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked',
-           'batched_index_select', 'AdjacentMatrixAttentionNetwork', 'LocalAttenNetwok', 'BeDropPath', 'BeMLP',
-           'BeBlock', 'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11',
-           'EncoderWithDirectionReconstructionV12', 'EncoderWithDirectionReconstructionV13']
+           'batched_index_select', 'NMatrixAttention', 'LocalAttenNetwok', 'BeDropPath', 'BeMLP', 'BeBlock',
+           'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11', 'EncoderWithDirectionReconstructionV12',
+           'EncoderWithDirectionReconstructionV12_V2', 'EncoderWithDirectionReconstructionV13']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -1351,10 +1351,10 @@ class MATAdjusted(nn.Module):
         model_dim,
         depth,
         heads=12,
-        Lg=0.9,
-        Ld=0.9,
+        Lg=0.75,
+        Ld=0.75,
         La=1.,
-        dist_kernel_fn="exp",
+        dist_kernel_fn="softmax",
     ):
         super().__init__()
         self.layers = nn.ModuleList([])
@@ -1455,7 +1455,7 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 
-class AdjacentMatrixAttentionNetwork(nn.Module):
+class NMatrixAttention(nn.Module):
     def __init__(
         self,
         *,
@@ -1531,7 +1531,7 @@ class LocalAttenNetwok(nn.Module):
         for _ in range(depth):
             global_attn = None
             self.layers.append(nn.ModuleList([
-                Residual(PreNorm(dim, AdjacentMatrixAttentionNetwork(
+                Residual(PreNorm(dim, NMatrixAttention(
                     dim = dim,
                     dim_head = dim_head,
                     heads = heads,
@@ -1723,16 +1723,16 @@ class EncoderWithDirectionReconstructionV12(nn.Module):
         self.fe = ExtractorV0(dim=dim_out, dim_base=96)
         self.encoder = BeDeepIceModel(dim_out)
         self.cls_token = nn.Linear(dim_out,1,bias=False)
-        self.loacl_attn = MATAdjusted(model_dim = dim_out, depth = 4)
+        self.loacl_attn = MATAdjusted(model_dim = dim_out, depth = 3)
         trunc_normal_(self.cls_token.weight, std=.02)
 
     def forward(self, batch):
         mask = batch["mask"] #bs, seq_len
         bs = mask.shape[0] # int
-        xyzt = torch.concat([batch["pos"][mask] , batch['time'][mask].view(-1, 1)], dim=1)
+        xyz = batch["pos"][mask]
         mask = mask[:,:mask.sum(-1).max()] 
         batch_index = mask.nonzero()[:,0] 
-        edge_index = knn_graph(x = xyzt, k=12, batch=batch_index).to(mask.device)
+        edge_index = knn_graph(x = xyz, k=8, batch=batch_index).to(mask.device)
         adj_matrix = to_dense_adj(edge_index, batch_index).int()
         x = self.fe(batch, mask.sum(-1).max())
         x = self.loacl_attn(x, adj_matrix, mask)
@@ -1741,6 +1741,47 @@ class EncoderWithDirectionReconstructionV12(nn.Module):
         mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
         x = self.encoder(x, mask=mask)
         return x
+    
+class EncoderWithDirectionReconstructionV12_V2(nn.Module):
+    def __init__(self, dim_out=256 + 64):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out, dim_base=96)
+        self.encoder = ContinuousTransformerWrapper(
+            dim_out=dim_out,
+            max_seq_len=256,
+            post_emb_norm = True,
+            use_abs_pos_emb = False, 
+            attn_layers=Encoder(dim=dim_out,
+                                depth=8,
+                                heads=8,
+                                use_rmsnorm = True,
+                                ff_glu = True,
+                                rel_pos_bias = True,
+                                deepnorm=True)   
+        )
+    
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.loacl_attn = MATAdjusted(model_dim = dim_out, depth = 3)
+        self.out = nn.Linear(dim_out, 3)
+        trunc_normal_(self.cls_token.weight, std=.02)
+        
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        xyz = batch["pos"][mask]
+        mask = mask[:,:mask.sum(-1).max()] 
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = knn_graph(x = xyz, k=8 ,batch=batch_index).to(mask.device)
+        adj_matrix = to_dense_adj(edge_index, batch_index).int()
+        x = self.fe(batch, mask.sum(-1).max())
+        x = self.loacl_attn(x, adj_matrix, mask)
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        x = x[:, 0]
+        return self.out(x)
     
     
 class EncoderWithDirectionReconstructionV13(nn.Module):
@@ -1768,6 +1809,7 @@ class EncoderWithDirectionReconstructionV13(nn.Module):
         x = torch.cat([cls_token,x],1)
         mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
         x = self.encoder(x, mask=mask)
+        
         return x
     
 

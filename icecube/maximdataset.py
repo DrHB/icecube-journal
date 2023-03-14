@@ -28,7 +28,7 @@ from torch_geometric.nn.pool import knn_graph
 import torch.nn.functional as F
 from torch_geometric.utils import to_dense_adj
 
-# %% ../nbs/00_maximdataset.ipynb 6
+# %% ../nbs/00_maximdataset.ipynb 7
 PATH = '/opt/slh/icecube/data/'
 
 def flatten(o):
@@ -205,6 +205,7 @@ class IceCubeDataset(Dataset):
         self.geometry = torch.from_numpy(sensors[['x','y','z']].values.astype(np.float32))
         self.qe = sensors['qe'].values
         self.ice_properties = ice_transparency(path)
+        self.train = train
         
         df = pd.read_parquet(os.path.join(path,'train_meta.parquet'))
         df = df[['event_id','azimuth','zenith']]
@@ -215,6 +216,7 @@ class IceCubeDataset(Dataset):
         self.target = df
         gc.collect()
         self.reduce_size = reduce_size
+
         
     def __len__(self):
         return len(self.files)*self.chunk_size if self.reduce_size < 0 \
@@ -240,6 +242,15 @@ class IceCubeDataset(Dataset):
         charge = df[idx]['charge'][0].item().to_numpy()
         auxiliary = df[idx]['auxiliary'][0].item().to_numpy()
         event_idx = df[idx]['event_id'].item()
+        
+        if self.train and np.random.rand() < 0.9:
+            print(time.shape[0])
+            filter_mask = generate_mask(time.shape[0])
+            sensor_id =  sensor_id[filter_mask]
+            time =  time[filter_mask]
+            charge = charge[filter_mask]
+            auxiliary = auxiliary[filter_mask]
+
             
         #sensor_id = sensor_id[~auxiliary]
         #time = time[~auxiliary]
