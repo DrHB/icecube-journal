@@ -1566,7 +1566,7 @@ class LocalAttenNetwok(nn.Module):
         else:
             adj_mask, adj_kv_indices = adj_mat.topk(dim = -1, k = max_neighbors)
         for attn, _ in self.layers:
-            x = attn(
+            x = x + attn(
                 x,
                 adj_kv_indices = adj_kv_indices,
                 mask = adj_mask
@@ -1644,11 +1644,11 @@ class BeBlock(nn.Module):
 
 
 class BeDeepIceModel(nn.Module):
-    def __init__(self, dim=384, depth=12, use_checkpoint=False, drop_b= 0., attn_drop_b = 0.,  **kwargs):
+    def __init__(self, dim=384, depth=12, use_checkpoint=False, drop_b= 0., attn_drop_b = 0., drop_path = 0.,  **kwargs):
         super().__init__()
         self.Beblocks = nn.ModuleList([ 
             BeBlock(
-                dim=dim, num_heads=dim//64, mlp_ratio=4, drop_path=0, init_values=1, attn_drop=attn_drop_b, drop=drop_b)
+                dim=dim, num_heads=dim//64, mlp_ratio=4, drop_path=drop_path, init_values=1, attn_drop=attn_drop_b, drop=drop_b)
             for i in range(depth)])
         #self.Beblocks = nn.ModuleList([ 
         #    nn.TransformerEncoderLayer(dim,dim//64,dim*4,dropout=0,
@@ -1699,10 +1699,10 @@ class BeDeepIceModel(nn.Module):
     
     
 class EncoderWithDirectionReconstructionV11(nn.Module):
-    def __init__(self, dim_out=256 + 64):
+    def __init__(self, dim_out=256 + 64, drop_path=0.):
         super().__init__()
         self.fe = ExtractorV0(dim=dim_out, dim_base=96)
-        self.encoder = BeDeepIceModel(dim_out)
+        self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path)
         self.cls_token = nn.Linear(dim_out,1,bias=False)
         self.loacl_attn = LocalAttenNetwok(dim = dim_out, depth = 3, num_neighbors_cutoff = 24)
         trunc_normal_(self.cls_token.weight, std=.02)
