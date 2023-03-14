@@ -1471,7 +1471,12 @@ class NMatrixAttention(nn.Module):
 
         self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
         self.to_out = nn.Linear(inner_dim, dim)
-
+        #null_k and null_v parameters serve as learnable "null" key and value vectors.
+        #provids a default key and value for each attention head 
+        #when there is no connection between two nodes or when adjacency information is missing.
+        #By including these null keys and values, the attention mechanism can learn to assign a
+        #ppropriate importance to the null entries in the adjacency matrix, effectively allowing the model to learn 
+        #how to handle situations where neighborhood information is incomplete or scarce.
         self.null_k = nn.Parameter(torch.randn(heads, dim_head))
         self.null_v = nn.Parameter(torch.randn(heads, dim_head))
 
@@ -1485,10 +1490,12 @@ class NMatrixAttention(nn.Module):
     ):
         b, n, d, h = *x.shape, self.heads
         flat_indices = repeat(adj_kv_indices, 'b n a -> (b h) (n a)', h = h)
-
+        #splits the input tensor into query q, key k, and value v tensors using the to_qkv linear laye
         q, k, v = self.to_qkv(x).chunk(3, dim = -1)
+        #rearranges q, k, and v tensors to have separate head dimensions.
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
 
+        #batched_index_select to select the corresponding k and v tensors based on the adjacency indices
         k, v = map(lambda t: rearrange(t, 'b h n d -> (b h) n d'), (k, v))
         k = batched_index_select(k, flat_indices)
         v = batched_index_select(v, flat_indices)
@@ -1498,7 +1505,7 @@ class NMatrixAttention(nn.Module):
         k = torch.cat((nk, k), dim = -2)
         v = torch.cat((nv, v), dim = -2)
         mask = F.pad(mask, (1, 0), value = 1)
-
+        #calculate the similarity scores between queries and keys, scales them, and applies the mask.
         sim = einsum('b h n d, b h n a d -> b h n a', q, k) * self.scale
 
         mask_value = -torch.finfo(sim.dtype).max
