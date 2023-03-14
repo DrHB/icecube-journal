@@ -1566,7 +1566,7 @@ class LocalAttenNetwok(nn.Module):
         else:
             adj_mask, adj_kv_indices = adj_mat.topk(dim = -1, k = max_neighbors)
         for attn, _ in self.layers:
-            x = x + attn(
+            x = attn(
                 x,
                 adj_kv_indices = adj_kv_indices,
                 mask = adj_mask
