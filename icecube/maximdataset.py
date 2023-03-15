@@ -244,7 +244,6 @@ class IceCubeDataset(Dataset):
         event_idx = df[idx]['event_id'].item()
         
         if self.train and np.random.rand() < 0.9:
-            print(time.shape[0])
             filter_mask = generate_mask(time.shape[0])
             sensor_id =  sensor_id[filter_mask]
             time =  time[filter_mask]

@@ -15,9 +15,10 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV8', 'EncoderWithDirectionReconstructionV9',
            'EncoderWithDirectionReconstructionV10', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
            'Attention', 'MAT', 'MATMaskedPool', 'MATAdjusted', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked',
-           'batched_index_select', 'NMatrixAttention', 'LocalAttenNetwok', 'BeDropPath', 'BeMLP', 'BeBlock',
-           'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11', 'EncoderWithDirectionReconstructionV12',
-           'EncoderWithDirectionReconstructionV12_V2', 'EncoderWithDirectionReconstructionV13']
+           'batched_index_select', 'NMatrixAttention', 'LocalAttenNetwok', 'LAttentionV2', 'LocalLatentsAttent',
+           'LocalAttenV2', 'BeDropPath', 'BeMLP', 'BeBlock', 'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11',
+           'EncoderWithDirectionReconstructionV12', 'EncoderWithDirectionReconstructionV12_V2',
+           'EncoderWithDirectionReconstructionV13', 'EncoderWithDirectionReconstructionV14']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -1574,6 +1575,116 @@ class LocalAttenNetwok(nn.Module):
 
 
         return x
+    
+
+class LAttentionV2(nn.Module):
+    def __init__(
+        self,
+        dim,
+        heads = 8,
+        dim_head = 64,
+        and_self_attend = False
+    ):
+        super().__init__()
+        inner_dim = heads * dim_head
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+
+        self.and_self_attend = and_self_attend
+
+        self.to_q = nn.Linear(dim, inner_dim, bias = False)
+        self.to_kv = nn.Linear(dim, inner_dim * 2, bias = False)
+        self.to_out = nn.Linear(inner_dim, dim, bias = False)
+
+    def forward(
+        self,
+        x,
+        context,
+        mask = None
+    ):
+        h, scale = self.heads, self.scale
+
+        if self.and_self_attend:
+            context = torch.cat((x, context), dim = -2)
+
+            if exists(mask):
+                mask = F.pad(mask, (x.shape[-2], 0), value = True)
+
+        q, k, v = (self.to_q(x), *self.to_kv(context).chunk(2, dim = -1))
+
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
+        dots = einsum('b h i d, b h j d -> b h i j', q, k) * scale
+
+        if exists(mask):
+            mask_value = -torch.finfo(dots.dtype).max
+            mask = rearrange(mask, 'b n -> b 1 1 n')
+            dots.masked_fill_(~mask, mask_value)
+
+        attn = dots.softmax(dim = -1)
+        out = einsum('b h i j, b h j d -> b h i d', attn, v)
+
+        out = rearrange(out, 'b h n d -> b n (h d)', h = h)
+        return self.to_out(out)
+
+class LocalLatentsAttent(nn.Module):
+    def __init__(
+        self,
+        dim,
+        heads = 8,
+        num_latents = 64,
+        latent_self_attend = False
+    ):
+        super().__init__()
+        self.latents = nn.Parameter(torch.randn(num_latents, dim))
+        self.attn1 = LAttentionV2(dim, heads, and_self_attend = latent_self_attend)
+        self.attn2 = LAttentionV2(dim, heads)
+
+    def forward(self, x, latents = None, mask = None):
+        b, *_ = x.shape
+
+        latents = self.latents
+
+        if latents.ndim == 2:
+            latents = repeat(latents, 'n d -> b n d', b = b)
+
+        latents = self.attn1(latents, x, mask = mask)
+        out     = self.attn2(x, latents)
+
+        return out, latents
+    
+class LocalAttenV2(nn.Module):
+    def __init__(
+        self,
+        dim,
+        depth,
+        heads = 8,
+        num_latents = 64,
+        ff_dropout = 0.
+    ):
+        super().__init__()
+        self.layers = nn.ModuleList([])
+
+        for _ in range(depth):
+            global_attn = PreNorm(dim, LocalLatentsAttent(
+                dim = dim,
+                heads = heads,
+                num_latents = num_latents
+            )) 
+
+            self.layers.append(nn.ModuleList([
+                global_attn,
+                Residual(PreNorm(dim, FeedForward(
+                    dim = dim,
+                    dropout = ff_dropout
+                )))
+            ]))
+
+    def forward(self, x, mask = None):
+        for attn, ff in self.layers:
+            out, _ = attn(x, mask = mask)
+            x = x + out
+            x = ff(x)
+        return x
 
 
 class BeDropPath(nn.Module):
@@ -1817,6 +1928,28 @@ class EncoderWithDirectionReconstructionV13(nn.Module):
         mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
         x = self.encoder(x, mask=mask)
         
+        return x
+    
+    
+class EncoderWithDirectionReconstructionV14(nn.Module):
+    def __init__(self, dim_out=256 + 64, drop_path=0.):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out, dim_base=96)
+        self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.loacl_attn = LocalAttenV2(dim = dim_out, depth = 4)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        mask = mask[:,:mask.sum(-1).max()] 
+        x = self.fe(batch, mask.sum(-1).max())
+        x = self.loacl_attn(x, mask)
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
         return x
     
 
