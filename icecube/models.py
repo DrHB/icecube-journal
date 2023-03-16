@@ -18,7 +18,8 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'batched_index_select', 'NMatrixAttention', 'LocalAttenNetwok', 'LAttentionV2', 'LocalLatentsAttent',
            'LocalAttenV2', 'BeDropPath', 'BeMLP', 'BeBlock', 'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11',
            'EncoderWithDirectionReconstructionV12', 'EncoderWithDirectionReconstructionV12_V2',
-           'EncoderWithDirectionReconstructionV13', 'EncoderWithDirectionReconstructionV14']
+           'EncoderWithDirectionReconstructionV13', 'EncoderWithDirectionReconstructionV14',
+           'EncoderWithDirectionReconstructionV15']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -1949,6 +1950,28 @@ class EncoderWithDirectionReconstructionV14(nn.Module):
         cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
         x = torch.cat([cls_token,x],1)
         mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        return x
+    
+    
+class EncoderWithDirectionReconstructionV15(nn.Module):
+    def __init__(self, dim_out=256 + 64, drop_path=0.):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out, dim_base=96)
+        self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.loacl_attn = LocalAttenV2(dim = dim_out, depth = 5)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        mask = mask[:,:mask.sum(-1).max()] 
+        x = self.fe(batch, mask.sum(-1).max())
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.loacl_attn(x, mask)
         x = self.encoder(x, mask=mask)
         return x
     
