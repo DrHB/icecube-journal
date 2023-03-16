@@ -1604,13 +1604,6 @@ class LAttentionV2(nn.Module):
         mask = None
     ):
         h, scale = self.heads, self.scale
-
-        if self.and_self_attend:
-            context = torch.cat((x, context), dim = -2)
-
-            if exists(mask):
-                mask = F.pad(mask, (x.shape[-2], 0), value = True)
-
         q, k, v = (self.to_q(x), *self.to_kv(context).chunk(2, dim = -1))
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
