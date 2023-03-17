@@ -16,7 +16,8 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV10', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
            'Attention', 'MAT', 'MATMaskedPool', 'MATAdjusted', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked',
            'batched_index_select', 'NMatrixAttention', 'LocalAttenNetwok', 'LAttentionV2', 'LocalLatentsAttent',
-           'LocalAttenV2', 'BeDropPath', 'BeMLP', 'BeBlock', 'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11',
+           'LocalAttenV2', 'GlobalLocalAttention', 'BeDropPath', 'BeMLP', 'BeBlock', 'BeDeepIceModel',
+           'EncoderWithDirectionReconstructionV11', 'EncoderWithDirectionReconstructionV11_V2_GLOBAL_LOCAL',
            'EncoderWithDirectionReconstructionV12', 'EncoderWithDirectionReconstructionV12_V2',
            'EncoderWithDirectionReconstructionV13', 'EncoderWithDirectionReconstructionV14',
            'EncoderWithDirectionReconstructionV15']
@@ -1679,6 +1680,75 @@ class LocalAttenV2(nn.Module):
             x = x + out
             x = ff(x)
         return x
+    
+class GlobalLocalAttention(nn.Module):
+    def __init__(
+        self,
+        dim,
+        depth,
+        dim_head = 64,
+        heads = 8,
+        num_neighbors_cutoff = None,
+        attn_dropout = 0.1,
+        ff_dropout=0.,
+    ):
+        super().__init__()
+        self.num_neighbors_cutoff = num_neighbors_cutoff
+        self.layers = nn.ModuleList([])
+
+        for _ in range(depth):
+            global_attn = PreNorm(dim, LocalLatentsAttent(
+                dim = dim,
+                heads = heads,
+                num_latents = 64
+            )) 
+        
+            self.layers.append(nn.ModuleList([
+                global_attn,
+                Residual(PreNorm(dim, NMatrixAttention(
+                    dim = dim,
+                    dim_head = dim_head,
+                    heads = heads,
+                    dropout = attn_dropout
+                ))),
+                Residual(PreNorm(dim, FeedForward(
+                    dim = dim,
+                    dropout = ff_dropout
+                )))
+            ]))
+
+    def forward(self, x, adjacency_mat, mask = None):
+        device, n = x.device, x.shape[1]
+
+        diag = torch.eye(adjacency_mat.shape[-1], device = device).bool()
+        adjacency_mat |= diag
+        if exists(mask):
+            adjacency_mat &= (mask[:, :, None] * mask[:, None, :])
+
+        adj_mat = adjacency_mat.float()
+        max_neighbors = int(adj_mat.sum(dim = -1).max())
+
+        if exists(self.num_neighbors_cutoff) and max_neighbors > self.num_neighbors_cutoff:
+            noise = torch.empty((n, n), device = device).uniform_(-0.01, 0.01)
+            adj_mat = adj_mat + noise
+            adj_mask, adj_kv_indices = adj_mat.topk(dim = -1, k = self.num_neighbors_cutoff)
+            adj_mask = (adj_mask > 0.5).float()
+        else:
+            adj_mask, adj_kv_indices = adj_mat.topk(dim = -1, k = max_neighbors)
+        
+        for attn, locla_attn, ff in self.layers:
+            x, _ = attn(x, mask = mask)
+            out = locla_attn(
+                x,
+                adj_kv_indices = adj_kv_indices,
+                mask = adj_mask
+            )
+            x = x + out
+            x = ff(x)
+            
+        return x
+    
+
 
 
 class BeDropPath(nn.Module):
@@ -1810,6 +1880,32 @@ class EncoderWithDirectionReconstructionV11(nn.Module):
         self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path)
         self.cls_token = nn.Linear(dim_out,1,bias=False)
         self.loacl_attn = LocalAttenNetwok(dim = dim_out, depth = 3, num_neighbors_cutoff = 24)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        pos = batch["pos"][mask] 
+        mask = mask[:,:mask.sum(-1).max()] 
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = knn_graph(x = pos, k=8, batch=batch_index).to(mask.device)
+        adj_matrix = to_dense_adj(edge_index, batch_index).int()
+        x = self.fe(batch, mask.sum(-1).max())
+        x = self.loacl_attn(x, adj_matrix, mask)
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        return x
+    
+    
+class EncoderWithDirectionReconstructionV11_V2_GLOBAL_LOCAL(nn.Module):
+    def __init__(self, dim_out=256 + 64, drop_path=0.):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out, dim_base=96)
+        self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.loacl_attn = GlobalLocalAttention(dim = dim_out, depth = 3, num_neighbors_cutoff = 24)
         trunc_normal_(self.cls_token.weight, std=.02)
 
     def forward(self, batch):
