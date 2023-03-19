@@ -68,3 +68,4 @@
 |hb_graph_encoder|`0.994`|retrying one last time gnn-> transformer, `xyzt` adjacet matrix on `12` neighbros (xyzt) implementaion might have a bug ... | `hb_training_loop/hb_graph_encoder.ipynb` |`cycle`|
 |hb_localattentionV2.ipynb|`0.9839`|sub_version of local attention more like global attention but with `fixed` learnable latent , `EncoderWithDirectionReconstructionV14`| `hb_training_loop/hb_localattentionV2.ipynb` |`cycle`|
 |hb_localattentionV3.ipynb|`0.9840`|same as `V2` but integrated `cls_token` at the begining and training with two `augs`, `time`, and `event` dropps, `EncoderWithDirectionReconstructionV15`| `hb_training_loop/hb_localattentionV3ipynb` |`cycle`|
+|hb_localattentionV4.ipynb|`0.9816`| 3x (`localattention` with `Factorize Attention`) followed by transformer, `EncoderWithDirectionReconstructionV11_V2_LOCAL_GLOBAL`| `hb_training_loop/hb_localattentionV4.ipynb` |`cycle`|
