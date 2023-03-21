@@ -70,4 +70,4 @@
 |hb_localattentionV3.ipynb|`0.9840`|same as `V2` but integrated `cls_token` at the begining and training with two `augs`, `time`, and `event` dropps, `EncoderWithDirectionReconstructionV15`| `hb_training_loop/hb_localattentionV3ipynb` |`cycle`|
 |hb_localattentionV4.ipynb|`0.9816`| 3x (`localattention` with `Factorize Attention`) followed by transformer, `EncoderWithDirectionReconstructionV11_V2_LOCAL_GLOBAL`| `hb_training_loop/hb_localattentionV4.ipynb` |`cycle`|
 |hb_localattentionV4FT2.ipynb|`0.9787`|same as `hb_localattentionV4` but finetuning on full datasset | `hb_training_loop/hb_localattentionV4FT2.ipynb` |`FULL`|
-|hb_localattentionV4FT2SWA.ipynb|`0.9787`|same as `hb_localattentionV4FT2` but finetuning on full datasset with SWA | `hb_training_loop/hb_localattentionV4FT2SWA.ipynb` |`FULL`|
+|hb_localattentionV4FT2SWA.ipynb||same as `hb_localattentionV4FT2` but finetuning on full datasset with SWA | `hb_training_loop/hb_localattentionV4FT2SWA.ipynb` |`FULL`|
