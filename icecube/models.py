@@ -16,12 +16,13 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV10', 'exists', 'default', 'Residual', 'PreNorm', 'FeedForwardV1',
            'Attention', 'MAT', 'MATMaskedPool', 'MATAdjusted', 'IceCubeModelEncoderMAT', 'IceCubeModelEncoderMATMasked',
            'batched_index_select', 'NMatrixAttention', 'LocalAttenNetwok', 'LAttentionV2', 'LocalLatentsAttent',
-           'LocalAttenV2', 'GlobalLocalAttention', 'LocalGlobalAttention', 'BeDropPath', 'BeMLP', 'BeBlock',
-           'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11',
+           'LocalAttenV2', 'GlobalLocalAttention', 'LocalGlobalAttention', 'RMSNorm', 'gAttention', 'GlobalAttentionV5',
+           'BeDropPath', 'BeMLP', 'BeBlock', 'BeDeepIceModel', 'EncoderWithDirectionReconstructionV11',
            'EncoderWithDirectionReconstructionV11_V2_GLOBAL_LOCAL',
            'EncoderWithDirectionReconstructionV11_V2_LOCAL_GLOBAL', 'EncoderWithDirectionReconstructionV12',
            'EncoderWithDirectionReconstructionV12_V2', 'EncoderWithDirectionReconstructionV13',
-           'EncoderWithDirectionReconstructionV14', 'EncoderWithDirectionReconstructionV15']
+           'EncoderWithDirectionReconstructionV14', 'EncoderWithDirectionReconstructionV15', 'get_ds_matrix',
+           'EncoderWithDirectionReconstructionV16']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -1816,6 +1817,93 @@ class LocalGlobalAttention(nn.Module):
             x = ff(x)
             
         return x
+    
+class RMSNorm(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.scale = dim ** 0.5
+        self.gamma = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x):
+        normed = F.normalize(x, dim = -1)
+        return normed * self.scale * self.gamma
+    
+class gAttention(nn.Module):
+    def __init__(
+        self,
+        dim,
+        dim_head = 64,
+        heads = 8
+    ):
+        super().__init__()
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+        dim_hidden = dim_head * heads
+
+        self.norm = RMSNorm(dim)
+        self.to_q = nn.Linear(dim, dim_hidden, bias = False)
+        self.to_kv = nn.Linear(dim, dim_hidden * 2, bias = False)
+        self.to_out = nn.Linear(dim_hidden, dim, bias = False)
+
+    def forward(
+        self,
+        x,
+        context = None,
+        mask = None,
+    ):
+        h = self.heads
+        x = self.norm(x)
+        if exists(context):
+            context = self.norm(context)
+        context = default(context, x)
+        q, k, v = (self.to_q(x), *self.to_kv(context).chunk(2, dim = -1))
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), (q, k, v))
+        q = q * self.scale
+        sim = einsum('b h i d, b h j d -> b h i j', q, k)
+
+        if exists(mask):
+            mask = rearrange(mask, 'b j -> b 1 1 j')
+            sim = sim.masked_fill(~mask, -torch.finfo(sim.dtype).max)
+
+        attn = sim.softmax(dim = -1)
+
+        out = einsum('b h i j, b h j d -> b h i d', attn, v)
+        out = rearrange(out, 'b h n d -> b n (h d)')
+        return self.to_out(out)
+    
+class GlobalAttentionV5(nn.Module):
+    def __init__(
+        self,
+        dim,
+        depth,
+        heads = 8,
+        dim_heads = 64,
+        ff_dropout = 0.
+    ):
+        super().__init__()
+        self.layers = nn.ModuleList([])
+
+        for _ in range(depth):
+            global_attn = gAttention(
+                dim = dim,
+                heads = heads,
+                dim_head = dim_heads,
+            )
+
+            self.layers.append(nn.ModuleList([
+                global_attn,
+                Residual(PreNorm(dim, FeedForward(
+                    dim = dim,
+                    dropout = ff_dropout
+                )))
+            ]))
+
+    def forward(self, x, mask = None, context = None):
+        for attn, ff in self.layers:
+            out = attn(x, mask = mask, context = context)
+            x = x + out
+            x = ff(x)
+        return x
 
 class BeDropPath(nn.Module):
     def __init__(self, drop_prob=None):
@@ -2156,4 +2244,46 @@ class EncoderWithDirectionReconstructionV15(nn.Module):
         x = self.encoder(x, mask=mask)
         return x
     
+    
+def get_ds_matrix(x, batch_index, mask, Lmax=None):
+    pos = x['pos'] if Lmax is None else x['pos'][:,:Lmax]
+    time = x['time'] if Lmax is None else x['time'][:,:Lmax]
+    ds2 = (pos[:,:,None] - pos[:,None,:]).pow(2).sum(-1) - \
+                ((time[:,:,None] - time[:,None,:])*(3e4/500*3e-1)).pow(2)
+    d = torch.sign(ds2)*torch.sqrt(torch.abs(ds2))
+    edge_index = knn_graph(x = d[mask], k=8, batch=batch_index).to(mask.device)
+    return edge_index
+    
+    
+class EncoderWithDirectionReconstructionV16(nn.Module):
+    def __init__(self, dim_out=256, drop_path=0.):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out, dim_base=32)
+        self.encoder = BeDeepIceModel(dim_out , drop_path=drop_path)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.local_root= EGNNModeLFEAT( emb_dim=dim_out, num_layers=3)
+        self.global_root =  LocalAttenV2(dim = dim_out, depth =3)
+        self.gl_lc = GlobalAttentionV5(dim = dim_out, depth = 1)
+        self.lc_gl = GlobalAttentionV5(dim = dim_out, depth = 1)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        pos = batch["pos"][mask] 
+        mask = mask[:,:mask.sum(-1).max()] 
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = get_ds_matrix(batch, batch_index, mask, Lmax=mask.sum(-1).max())
+        x = self.fe(batch, mask.sum(-1).max())
+        
+        graph_featutre = self.local_root(x[mask], pos, edge_index)
+        graph_featutre, mask = to_dense_batch(graph_featutre, batch_index)
+        global_featutre = self.global_root(x, mask)
+        x = self.gl_lc(graph_featutre, mask, context = global_featutre) + self.lc_gl(global_featutre, mask, context =graph_featutre )
+        
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        return x
 
