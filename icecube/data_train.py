@@ -58,6 +58,12 @@ def ice_transparency(path, datum=1950):
     f_absorption = interp1d(df["z_norm"], df["absorption_len_norm"])
     return f_scattering, f_absorption
 
+
+def generate_mask(L):
+    mask = np.random.choice([True, False], size=L, p=[0.95, 0.05])
+    return mask
+
+
 class IceCubeCache(Dataset):
     def __init__(self, path, mode='test', L=128, cache_size=4, reduce_size=-1, mask_only=False):
         val_fnames = ['batch_655.parquet','batch_656.parquet','batch_657.parquet',
@@ -97,6 +103,7 @@ class IceCubeCache(Dataset):
         self.geometry = torch.from_numpy(sensors[['x','y','z']].values.astype(np.float32))
         self.qe = sensors['qe'].values
         self.ice_properties = ice_transparency(path_ice_properties)
+        self.mode = mode
         
     def __len__(self):
         return self.chunk_cumsum[-1] if self.reduce_size < 0 \
@@ -139,6 +146,17 @@ class IceCubeCache(Dataset):
         auxiliary = df['auxiliary'][0].item().to_numpy()
         event_idx = df['event_id'].item()
         
+        if self.mode == 'train' and np.random.rand() < 0.05:
+            filter_mask = generate_mask(time.shape[0])
+            sensor_id =  sensor_id[filter_mask]
+            time =  time[filter_mask]
+            charge = charge[filter_mask]
+            auxiliary = auxiliary[filter_mask]
+            #event_idx = event_idx[filter_mask]
+    
+        if self.mode == 'train' and np.random.rand() < 0.05:
+            time = time + np.random.randint(-6, 6, time.shape[0])
+            
         time = (time - 1e4)/3e4
         charge = np.log10(charge)/3.0
         

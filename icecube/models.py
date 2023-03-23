@@ -22,7 +22,8 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV11_V2_LOCAL_GLOBAL', 'EncoderWithDirectionReconstructionV12',
            'EncoderWithDirectionReconstructionV12_V2', 'EncoderWithDirectionReconstructionV13',
            'EncoderWithDirectionReconstructionV14', 'EncoderWithDirectionReconstructionV15', 'get_ds_matrix',
-           'EncoderWithDirectionReconstructionV16', 'EncoderWithDirectionReconstructionV17']
+           'EncoderWithDirectionReconstructionV16', 'EncoderWithDirectionReconstructionV17',
+           'EncoderWithDirectionReconstructionV18']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -2309,6 +2310,44 @@ class EncoderWithDirectionReconstructionV17(nn.Module):
         x = self.fe(batch, mask.sum(-1).max())
         
         graph_featutre = self.local_root(x[mask], pos, edge_index)
+        graph_featutre, mask = to_dense_batch(graph_featutre, batch_index)
+        global_featutre = self.global_root(x, mask)
+        x = torch.cat([global_featutre, graph_featutre],2)
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        return x
+    
+    
+class EncoderWithDirectionReconstructionV18(nn.Module):
+    def __init__(self, dim_out=256, drop_path=0.):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out//2, dim_base=32)
+        self.encoder = BeDeepIceModel(dim_out , drop_path=drop_path)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.local_root= DynEdgeFEXTRACTRO(9, 
+                                           post_processing_layer_sizes = [336, dim_out//2], 
+                                           dynedge_layer_sizes = [(128, 256), (336, 256), (336, 256), (336, 256)])
+        self.global_root =  LocalAttenV2(dim = dim_out//2, depth =4)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        graph_featutre = torch.concat([batch["pos"][mask] , 
+                             batch['time'][mask].view(-1, 1),
+                             batch['auxiliary'][mask].view(-1, 1),
+                             batch['qe'][mask].view(-1, 1),
+                             batch['charge'][mask].view(-1, 1),
+                             batch["ice_properties"][mask], 
+                              ], dim=1)
+        bs = mask.shape[0] # int
+        mask = mask[:,:mask.sum(-1).max()] 
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = knn_graph(x = graph_featutre[:,:3], k=8, batch=batch_index).to(mask.device)
+        x = self.fe(batch, mask.sum(-1).max())
+        
+        graph_featutre, _, _ = self.local_root(graph_featutre, edge_index, batch_index, mask.sum(-1))
         graph_featutre, mask = to_dense_batch(graph_featutre, batch_index)
         global_featutre = self.global_root(x, mask)
         x = torch.cat([global_featutre, graph_featutre],2)

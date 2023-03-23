@@ -728,7 +728,7 @@ class DynEdgeFEXTRACTRO(GNN):
                 if ix == 0:
                     nb_in *= 2
                 layers.append(torch.nn.Linear(nb_in, nb_out))
-                layers.append(nn.BatchNorm1d(nb_out))
+                layers.append(nn.LayerNorm(nb_out))
                 layers.append(self._activation)
 
             conv_layer = DynEdgeConv(
@@ -750,7 +750,7 @@ class DynEdgeFEXTRACTRO(GNN):
         layer_sizes = [nb_latent_features] + list(self._post_processing_layer_sizes)
         for nb_in, nb_out in zip(layer_sizes[:-1], layer_sizes[1:]):
             post_processing_layers.append(torch.nn.Linear(nb_in, nb_out))
-            post_processing_layers.append(nn.BatchNorm1d(nb_out))
+            post_processing_layers.append(nn.LayerNorm(nb_out))
             post_processing_layers.append(self._activation)
 
         self._post_processing = torch.nn.Sequential(*post_processing_layers)
@@ -767,7 +767,7 @@ class DynEdgeFEXTRACTRO(GNN):
         layer_sizes = [nb_latent_features] + list(self._readout_layer_sizes)
         for nb_in, nb_out in zip(layer_sizes[:-1], layer_sizes[1:]):
             readout_layers.append(torch.nn.Linear(nb_in, nb_out))
-            readout_layers.append(nn.BatchNorm1d(nb_out))
+            readout_layers.append(nn.LayerNorm(nb_out))
             readout_layers.append(self._activation)
 
         self._readout = torch.nn.Sequential(*readout_layers)
