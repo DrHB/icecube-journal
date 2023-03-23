@@ -22,7 +22,7 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV11_V2_LOCAL_GLOBAL', 'EncoderWithDirectionReconstructionV12',
            'EncoderWithDirectionReconstructionV12_V2', 'EncoderWithDirectionReconstructionV13',
            'EncoderWithDirectionReconstructionV14', 'EncoderWithDirectionReconstructionV15', 'get_ds_matrix',
-           'EncoderWithDirectionReconstructionV16']
+           'EncoderWithDirectionReconstructionV16', 'EncoderWithDirectionReconstructionV17']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -1973,11 +1973,11 @@ class BeBlock(nn.Module):
 
 
 class BeDeepIceModel(nn.Module):
-    def __init__(self, dim=384, depth=12, use_checkpoint=False, drop_b= 0., attn_drop_b = 0., drop_path = 0.,  **kwargs):
+    def __init__(self, dim=384, depth=12, use_checkpoint=False, drop_b= 0., div_factor=64, attn_drop_b = 0., drop_path = 0.,  **kwargs):
         super().__init__()
         self.Beblocks = nn.ModuleList([ 
             BeBlock(
-                dim=dim, num_heads=dim//64, mlp_ratio=4, drop_path=drop_path, init_values=1, attn_drop=attn_drop_b, drop=drop_b)
+                dim=dim, num_heads=dim//div_factor, mlp_ratio=4, drop_path=drop_path, init_values=1, attn_drop=attn_drop_b, drop=drop_b)
             for i in range(depth)])
         #self.Beblocks = nn.ModuleList([ 
         #    nn.TransformerEncoderLayer(dim,dim//64,dim*4,dropout=0,
@@ -2261,8 +2261,8 @@ class EncoderWithDirectionReconstructionV16(nn.Module):
         self.fe = ExtractorV0(dim=dim_out, dim_base=32)
         self.encoder = BeDeepIceModel(dim_out , drop_path=drop_path)
         self.cls_token = nn.Linear(dim_out,1,bias=False)
-        self.local_root= EGNNModeLFEAT( emb_dim=dim_out, num_layers=3)
-        self.global_root =  LocalAttenV2(dim = dim_out, depth =3)
+        self.local_root= EGNNModeLFEAT( emb_dim=dim_out, num_layers=2)
+        self.global_root =  LocalAttenV2(dim = dim_out, depth =2)
         self.gl_lc = GlobalAttentionV5(dim = dim_out, depth = 1)
         self.lc_gl = GlobalAttentionV5(dim = dim_out, depth = 1)
         trunc_normal_(self.cls_token.weight, std=.02)
@@ -2287,3 +2287,33 @@ class EncoderWithDirectionReconstructionV16(nn.Module):
         x = self.encoder(x, mask=mask)
         return x
 
+
+
+class EncoderWithDirectionReconstructionV17(nn.Module):
+    def __init__(self, dim_out=256, drop_path=0.):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out//2, dim_base=32)
+        self.encoder = BeDeepIceModel(dim_out , drop_path=drop_path)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.local_root= EGNNModeLFEAT( emb_dim=dim_out//2, num_layers=3)
+        self.global_root =  LocalAttenV2(dim = dim_out//2, depth =4)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        pos = batch["pos"][mask] 
+        mask = mask[:,:mask.sum(-1).max()] 
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = get_ds_matrix(batch, batch_index, mask, Lmax=mask.sum(-1).max())
+        x = self.fe(batch, mask.sum(-1).max())
+        
+        graph_featutre = self.local_root(x[mask], pos, edge_index)
+        graph_featutre, mask = to_dense_batch(graph_featutre, batch_index)
+        global_featutre = self.global_root(x, mask)
+        x = torch.cat([global_featutre, graph_featutre],2)
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        return x
