@@ -2367,7 +2367,7 @@ class EncoderWithDirectionReconstructionV19(nn.Module):
         self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path, out_class=False)
         self.top_token = nn.Linear(dim_out,1,bias=False)
         self.cls_token = nn.Linear(dim_out,1,bias=False)
-        self.gl_attn = LocalAttenV2(dim = dim_out, depth = 6, num_latents=32)
+        self.gl_attn = LocalAttenV2(dim = dim_out, depth = 8, num_latents=64)
         self.proj_out = nn.Linear(dim_out * 2, 3)
         trunc_normal_(self.cls_token.weight, std=.02)
 
