@@ -23,7 +23,7 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV12_V2', 'EncoderWithDirectionReconstructionV13',
            'EncoderWithDirectionReconstructionV14', 'EncoderWithDirectionReconstructionV15', 'get_ds_matrix',
            'EncoderWithDirectionReconstructionV16', 'EncoderWithDirectionReconstructionV17',
-           'EncoderWithDirectionReconstructionV18']
+           'EncoderWithDirectionReconstructionV18', 'EncoderWithDirectionReconstructionV19']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -1974,7 +1974,7 @@ class BeBlock(nn.Module):
 
 
 class BeDeepIceModel(nn.Module):
-    def __init__(self, dim=384, depth=12, use_checkpoint=False, drop_b= 0., div_factor=64, attn_drop_b = 0., drop_path = 0.,  **kwargs):
+    def __init__(self, dim=384, depth=12, out_class = 3, use_checkpoint=False, drop_b= 0., div_factor=64, attn_drop_b = 0., drop_path = 0.,  **kwargs):
         super().__init__()
         self.Beblocks = nn.ModuleList([ 
             BeBlock(
@@ -1984,8 +1984,8 @@ class BeDeepIceModel(nn.Module):
         #    nn.TransformerEncoderLayer(dim,dim//64,dim*4,dropout=0,
         #        activation=nn.GELU(), batch_first=True, norm_first=True)
         #    for i in range(depth)])
-
-        self.proj_out = nn.Linear(dim,3)
+        self.out_class = out_class
+        self.proj_out = nn.Linear(dim,out_class) if out_class == 3 else nn.Identity()
         self.use_checkpoint = use_checkpoint
         self.apply(self._init_weights)
 
@@ -2024,7 +2024,8 @@ class BeDeepIceModel(nn.Module):
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x, None, attn_mask)
             else: x = blk(x, None, attn_mask)
-        x = self.proj_out(x[:,0]) #cls token
+        if self.out_class == 3:
+            x = self.proj_out(x[:,0]) #cls token
         return x
     
     
@@ -2356,3 +2357,35 @@ class EncoderWithDirectionReconstructionV18(nn.Module):
         mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
         x = self.encoder(x, mask=mask)
         return x
+    
+    
+    
+class EncoderWithDirectionReconstructionV19(nn.Module):
+    def __init__(self, dim_out=256, drop_path=0.):
+        super().__init__()
+        self.fe = ExtractorV0(dim=dim_out, dim_base=32)
+        self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path, out_class=False)
+        self.top_token = nn.Linear(dim_out,1,bias=False)
+        self.cls_token = nn.Linear(dim_out,1,bias=False)
+        self.gl_attn = LocalAttenV2(dim = dim_out, depth = 6, num_latents=32)
+        self.proj_out = nn.Linear(dim_out * 2, 3)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def forward(self, batch):
+        mask = batch["mask"] #bs, seq_len
+        bs = mask.shape[0] # int
+        mask = mask[:,:mask.sum(-1).max()] 
+        x = self.fe(batch, mask.sum(-1).max())
+        
+        top_token = self.top_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([top_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.gl_attn(x, mask)
+        
+        bs = mask.shape[0] # int
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
+        x = self.encoder(x, mask=mask)
+        return self.proj_out(torch.cat([x[:,0], x[:,1]], dim=1))
+    
