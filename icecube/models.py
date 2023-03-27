@@ -2364,11 +2364,9 @@ class EncoderWithDirectionReconstructionV19(nn.Module):
     def __init__(self, dim_out=256, drop_path=0.):
         super().__init__()
         self.fe = ExtractorV0(dim=dim_out, dim_base=32)
-        self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path, out_class=False)
-        self.top_token = nn.Linear(dim_out,1,bias=False)
+        self.encoder = BeDeepIceModel(dim_out, drop_path=drop_path)
         self.cls_token = nn.Linear(dim_out,1,bias=False)
-        self.gl_attn = LocalAttenV2(dim = dim_out, depth = 8, num_latents=64)
-        self.proj_out = nn.Linear(dim_out * 2, 3)
+        self.gl_attn = GlobalAttentionV5(dim = dim_out, depth = 12)
         trunc_normal_(self.cls_token.weight, std=.02)
 
     def forward(self, batch):
@@ -2376,16 +2374,10 @@ class EncoderWithDirectionReconstructionV19(nn.Module):
         bs = mask.shape[0] # int
         mask = mask[:,:mask.sum(-1).max()] 
         x = self.fe(batch, mask.sum(-1).max())
-        
-        top_token = self.top_token.weight.unsqueeze(0).expand(bs,-1,-1)
-        x = torch.cat([top_token,x],1)
-        mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
         x = self.gl_attn(x, mask)
-        
-        bs = mask.shape[0] # int
         cls_token = self.cls_token.weight.unsqueeze(0).expand(bs,-1,-1)
         x = torch.cat([cls_token,x],1)
         mask = torch.cat([torch.ones(bs, 1, dtype=torch.bool, device=x.device), mask], dim=1)
         x = self.encoder(x, mask=mask)
-        return self.proj_out(torch.cat([x[:,0], x[:,1]], dim=1))
+        return x
     

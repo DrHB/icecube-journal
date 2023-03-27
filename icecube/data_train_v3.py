@@ -2,6 +2,7 @@ import polars as pl
 import pandas as pd
 import gc, os, random, math
 import numpy as np
+import pickle5 as pickle
 from tqdm.notebook import tqdm
 from collections import OrderedDict
 from bisect import bisect_right
@@ -58,31 +59,25 @@ def ice_transparency(path, datum=1950):
     f_absorption = interp1d(df["z_norm"], df["absorption_len_norm"])
     return f_scattering, f_absorption
 
-
-def generate_mask(L):
-    mask = np.random.choice([True, False], size=L, p=[0.95, 0.05])
-    return mask
-
-
 class IceCubeCache(Dataset):
-    def __init__(self, path, mode='test', L=128, cache_size=4, reduce_size=-1, mask_only=False):
+    def __init__(self, path, mode='test', selection='total', L=128, cache_size=4, reduce_size=-1, mask_only=False):
         val_fnames = ['batch_655.parquet','batch_656.parquet','batch_657.parquet',
                       'batch_658.parquet','batch_659.parquet']
-        chunk_size=200000
+        with open(os.path.join(path,'Nevents.pickle'), 'rb') as f: Nevents = pickle.load(f)
         self.mode, self.reduce_size, self.mask_only = mode, reduce_size, mask_only
         #put data, meta, and ice properties at the same folder
         path_ice_properties = path 
-        self.path_meta = os.path.join(path, 'train_meta')
+        self.path_meta = os.path.join(path, 'train_meta') if  mode != 'test' else None
+        self.selection = selection
 
         if mode == 'train' or mode == 'eval':
-            #assert meta is not None, 'Need to provide labels'
             self.path = os.path.join(path,'train')
-            self.files = [p for p in sorted(os.listdir(self.path)) \
-                          if p!='batch_660.parquet'] #660 is shorter
+            self.files = [p for p in sorted(os.listdir(self.path))]
             if mode == 'train':
                 self.files = sorted(set(self.files) - set(val_fnames))
             else: self.files = val_fnames
-            self.chunks = [chunk_size]*len(self.files)
+            self.chunks = [Nevents[fname][selection] for fname in self.files]
+            
         elif mode == 'test':
             self.path = os.path.join(path,'test')
             self.files = [p for p in sorted(os.listdir(self.path))]
@@ -103,7 +98,6 @@ class IceCubeCache(Dataset):
         self.geometry = torch.from_numpy(sensors[['x','y','z']].values.astype(np.float32))
         self.qe = sensors['qe'].values
         self.ice_properties = ice_transparency(path_ice_properties)
-        self.mode = mode
         
     def __len__(self):
         return self.chunk_cumsum[-1] if self.reduce_size < 0 \
@@ -119,15 +113,23 @@ class IceCubeCache(Dataset):
                 pl.col("time").list(),
                 pl.col("charge").list(),
                 pl.col("auxiliary").list(),])
+            if self.selection == 'short': 
+                df = df.filter(pl.col("count") < 64)
+            elif self.selection == 'medium':
+                df = df.filter((pl.col("count") >= 64) & (pl.col("count") < 192))
+            elif self.selection == 'long':
+                df = df.filter(pl.col("count") >= 192)
             self.cache[fname] = df.sort('event_id')
             if len(self.cache) > self.cache_size: del self.cache[list(self.cache.keys())[0]]
-                
-    def load_meta(self, fname):
+               
+        if self.path_meta is None: return
         if self.meta is None: self.meta = OrderedDict()
         if fname not in self.meta:
             fidx = fname.split('.')[0].split('_')[-1]
-            self.meta[fname] = pl.read_parquet(os.path.join(self.path_meta,
-                                f'train_meta_{fidx}.parquet')).sort('event_id')
+            df = pl.read_parquet(os.path.join(self.path_meta,
+                                f'train_meta_{fidx}.parquet'))
+            df = df.filter(pl.col('event_id').is_in(self.cache[fname]['event_id'])).sort('event_id')
+            self.meta[fname] = df
             if len(self.meta) > self.cache_size: del self.meta[list(self.meta.keys())[0]]
         
     def __getitem__(self, idx0):
@@ -146,21 +148,12 @@ class IceCubeCache(Dataset):
         auxiliary = df['auxiliary'][0].item().to_numpy()
         event_idx = df['event_id'].item()
         
-        if self.mode == 'train' and np.random.rand() < 0.01:
-            filter_mask = generate_mask(time.shape[0])
-            sensor_id =  sensor_id[filter_mask]
-            time =  time[filter_mask]
-            charge = charge[filter_mask]
-            auxiliary = auxiliary[filter_mask]
-            #event_idx = event_idx[filter_mask]
-    
-        if self.mode == 'train' and np.random.rand() < 0.01:
-            time = time + np.random.randint(-6, 6, time.shape[0])
-            
+        #time = time - time.min() + 6000.0
         time = (time - 1e4)/3e4
         charge = np.log10(charge)/3.0
         
         L = len(sensor_id)
+        L0 = L
         if L < self.L:
             sensor_id = np.pad(sensor_id,(0,max(0,self.L-L)))
             time = np.pad(time,(0,max(0,self.L-L)))
@@ -174,8 +167,6 @@ class IceCubeCache(Dataset):
             ids_p = ids[auxiliary_p][:min(self.L-len(ids_n),len(auxiliary_p))]
             ids = np.concatenate([ids_n,ids_p])
             ids.sort()
-            L = len(ids)
-            
             sensor_id = sensor_id[ids]
             time = time[ids]
             charge = charge[ids]
@@ -194,19 +185,21 @@ class IceCubeCache(Dataset):
         ice_properties = np.pad(ice_properties,((0,max(0,self.L-L)),(0,0)))
         ice_properties = torch.from_numpy(ice_properties).float()
         
-        if self.mode != 'test': 
-            self.load_meta(fname)
+        time = torch.from_numpy(time).float()
+        #if self.mode == 'train': time += 0.1*torch.randn(1)
+        
+        if self.mode != 'test':
             meta = self.meta[fname][idx]
             azimuth = meta['azimuth'].item()
             zenith = meta['zenith'].item()
             target = np.array([azimuth,zenith]).astype(np.float32)
             target = torch.from_numpy(target)
         else: target = df['event_id'].item()
-
-        return {'sensor_id': sensor_id, 'time': torch.from_numpy(time).float(),
+        
+        return {'sensor_id': sensor_id, 'time': time,
                 'charge': torch.from_numpy(charge).float(), 'pos':pos, 'mask':attn_mask,
                 'idx':event_idx, 'auxiliary':torch.from_numpy(auxiliary).long(),
-                'qe':qe, 'ice_properties':ice_properties}, \
+                'qe':qe, 'ice_properties':ice_properties, 'L0':L0}, \
                {'target': target}
 
 class RandomChunkSampler(torch.utils.data.Sampler[int]):
