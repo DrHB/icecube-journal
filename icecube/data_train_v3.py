@@ -135,7 +135,7 @@ class IceCubeCache(Dataset):
     def __getitem__(self, idx0):
         fidx = bisect_right(self.chunk_cumsum, idx0)
         fname = self.files[fidx]
-        idx = int(idx0 - self.chunk_cumsum[fidx] + self.chunk_cumsum[0])
+        idx = int(idx0 - self.chunk_cumsum[fidx-1]) if fidx > 0 else idx0
         
         self.load_data(fname)
         df = self.cache[fname][idx]
