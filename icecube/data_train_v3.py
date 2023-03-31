@@ -240,7 +240,7 @@ class RandomChunkSampler(torch.utils.data.Sampler[int]):
         yield_samples = 0
         for i in chunk_list:
             chunk_len = self.chunks[i]
-            offset = cumsum[i] - cumsum[0]
+            offset = cumsum[i-1] if i > 0 else 0
             samples = (offset + torch.randperm(chunk_len, generator=generator)).tolist()
             if len(samples) <= self.num_samples - yield_samples:
                 yield_samples += len(samples)
