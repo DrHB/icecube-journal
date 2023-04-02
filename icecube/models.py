@@ -25,8 +25,7 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV16', 'EncoderWithDirectionReconstructionV17',
            'EncoderWithDirectionReconstructionV18', 'EncoderWithDirectionReconstructionV19', 'DropPath', 'Mlp', 'Block',
            'Attention_rel', 'Block_rel', 'ExtractorV11', 'ScaledSinusoidalEmbedding', 'ExtractorV11Scaled', 'Rel_ds',
-           'get_nbs', 'LocalBlock', 'EncoderWithDirectionReconstructionV20',
-           'EncoderWithDirectionReconstructionV20_COMB']
+           'get_nbs', 'LocalBlock', 'EncoderWithDirectionReconstructionV20', 'EncoderWithDirectionReconstructionV22']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -2618,18 +2617,21 @@ class ExtractorV11Scaled(nn.Module):
         self.emb_charge = ScaledSinusoidalEmbedding(dim=dim_base)
         self.time = ScaledSinusoidalEmbedding(dim=dim_base)
         self.aux_emb = nn.Embedding(2,dim_base//2)
-        self.proj = nn.Linear(11*dim_base//2,dim)
+        self.emb2 = ScaledSinusoidalEmbedding(dim=dim_base//2)
+        self.proj = nn.Sequential(nn.Linear(6*dim_base,6*dim_base),nn.LayerNorm(6*dim_base),
+                                  nn.GELU(),nn.Linear(6*dim_base,dim))
         
     def forward(self, x, Lmax=None):
         pos = x['pos'] if Lmax is None else x['pos'][:,:Lmax]
         charge = x['charge'] if Lmax is None else x['charge'][:,:Lmax]
         time = x['time'] if Lmax is None else x['time'][:,:Lmax]
         auxiliary = x['auxiliary'] if Lmax is None else x['auxiliary'][:,:Lmax]
-        qe = x['qe'] if Lmax is None else x['qe'][:,:Lmax]
-        ice_properties = x['ice_properties'] if Lmax is None else x['ice_properties'][:,:Lmax]
+        length = torch.log10(x['L0'].to(dtype=pos.dtype))
+
         
         x = torch.cat([self.pos(4096*pos).flatten(-2), self.emb_charge(1024*charge),
-                       self.time(4096*time),self.aux_emb(auxiliary)
+                       self.time(4096*time),self.aux_emb(auxiliary), 
+                       self.emb2(length).unsqueeze(1).expand(-1,pos.shape[1],-1)
                       ],-1)
         x = self.proj(x)
         return x
@@ -2801,7 +2803,7 @@ class EncoderWithDirectionReconstructionV20(nn.Module):
         return x
     
     
-class EncoderWithDirectionReconstructionV20_COMB(nn.Module):
+class EncoderWithDirectionReconstructionV22(nn.Module):
     def __init__(self, dim=384, dim_base=128, depth=8, use_checkpoint=False, head_size=64, **kwargs):
         super().__init__()
         self.extractor = ExtractorV11Scaled(dim_base,dim//2)
