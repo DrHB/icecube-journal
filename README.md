@@ -82,4 +82,5 @@
 |V22.ipynb|`0.9743`| in this experiment i am replacing local attention with `GraphNEt`, graph model the `edge_index` is build based on `xyz` with considering `8` neighbors. For extracting featuers I will use `ExtractorV11Scaled` operating on (`x,y,z, aux, t, charge, L`) , we are added for each of them `scaled` parramaters, this get concattanated with `Graphnet` features and fed to `4` layers for `rel_bias_attention` and then fed to `S` model | `hb_training_loop/V22.ipynb` |`FULL`|
 |V22FT.ipynb|`0.9731`|same as `V22.ipynb` but FT | `hb_training_loop/V22FT.ipynb` |`FULL`|
 |V22FT2.ipynb|`0.9725`|same as `V22FT.ipynb` but FT with `swa` | `hb_training_loop/V22FT2.ipynb` |`FULL`|
-|V22FT3.ipynb|`0.9721`|same as `V22FT2.ipynb` but FT with `swa` and `loss_comb` which is metric loss and vms | `hb_training_loop/V22FT3.ipynb` |`FULL`|
+|V22FT3.ipynb|`0.9669`|same as `V22FT2.ipynb` but FT with `swa` and `loss_comb` which is metric loss and vms (only did `4/8`) | `hb_training_loop/V22FT3.ipynb` |`FULL`|
+|V22FT4.ipynb||same as `V22FT3.ipynb` but FT with `swa` and `loss_comb` which is metric loss and vms | `hb_training_loop/V22FT4.ipynb` |`FULL`|
