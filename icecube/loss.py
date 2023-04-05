@@ -5,8 +5,7 @@ import torch.nn.functional as F
 from loss_functions import VonMisesFisher3DLoss
 
 def loss(pred,y):
-    #print(pred.max())
-    pred = F.normalize(pred.float(),dim=-1)
+    pred = F.normalize(pred.double(),dim=-1)
     
     sa2 = torch.sin(y['target'][:,0])
     ca2 = torch.cos(y['target'][:,0])
@@ -14,7 +13,7 @@ def loss(pred,y):
     cz2 = torch.cos(y['target'][:,1])
     
     scalar_prod = (pred[:,0]*sa2*sz2 + pred[:,1]*ca2*sz2 + pred[:,2]*cz2).clip(-1+1e-8,1-1e-8)
-    return torch.acos(scalar_prod).abs().mean(-1)   
+    return torch.acos(scalar_prod).abs().mean(-1).float()
 
 def loss_vms(pred,y):
     sa2 = torch.sin(y['target'][:,0])
@@ -29,6 +28,9 @@ def loss_vms(pred,y):
     
     loss = VonMisesFisher3DLoss()(p,t)
     return loss
+    
+def loss_comb(pred,y):
+    return loss(pred,y) + 0.05*loss_vms(pred,y)
 
 def get_val(pred):
     pred = F.normalize(pred,dim=-1)
