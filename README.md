@@ -83,4 +83,5 @@
 |V22FT.ipynb|`0.9731`|same as `V22.ipynb` but FT | `hb_training_loop/V22FT.ipynb` |`FULL`|
 |V22FT2.ipynb|`0.9725`|same as `V22FT.ipynb` but FT with `swa` | `hb_training_loop/V22FT2.ipynb` |`FULL`|
 |V22FT3.ipynb|`0.9669`|same as `V22FT2.ipynb` but FT with `swa` and `loss_comb` which is metric loss and vms (only did `4/8`) | `hb_training_loop/V22FT3.ipynb` |`FULL`|
-|V22FT4.ipynb||same as `V22FT3.ipynb` but FT with `swa` and `loss_comb` which is metric loss and vms | `hb_training_loop/V22FT4.ipynb` |`FULL`|
+|V22FT4.ipynb|`0.9662`|same as `V22FT3.ipynb` but FT with `swa` and `loss_comb` which is metric loss and vms | `hb_training_loop/V22FT4.ipynb` |`FULL`|
+|V22FT5.ipynb||same as `V22FT4.ipynb` but FT with `swa` and `loss_comb` which is metric loss and vms | `hb_training_loop/V22FT5.ipynb` |`FULL`|
