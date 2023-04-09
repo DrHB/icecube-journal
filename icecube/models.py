@@ -25,7 +25,8 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV16', 'EncoderWithDirectionReconstructionV17',
            'EncoderWithDirectionReconstructionV18', 'EncoderWithDirectionReconstructionV19', 'DropPath', 'Mlp', 'Block',
            'Attention_rel', 'Block_rel', 'ExtractorV11', 'ScaledSinusoidalEmbedding', 'ExtractorV11Scaled', 'Rel_ds',
-           'get_nbs', 'LocalBlock', 'EncoderWithDirectionReconstructionV20', 'EncoderWithDirectionReconstructionV22']
+           'get_nbs', 'LocalBlock', 'EncoderWithDirectionReconstructionV20', 'EncoderWithDirectionReconstructionV22',
+           'EncoderWithDirectionReconstructionV23']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -2889,6 +2890,108 @@ class EncoderWithDirectionReconstructionV22(nn.Module):
             else:
                 x = blk(x,attn_mask,rel_pos_bias)
                 rel_pos_bias = None
+        mask = torch.cat([torch.ones(B,1,dtype=mask.dtype, device=mask.device),mask],1)
+        attn_mask = torch.zeros(mask.shape, device=mask.device)
+        attn_mask[~mask] = -torch.inf
+        cls_token = self.cls_token.weight.unsqueeze(0).expand(B,-1,-1)
+        x = torch.cat([cls_token,x],1)
+        
+        for blk in self.blocks:
+            if self.use_checkpoint:
+                x = checkpoint.checkpoint(blk, x, None, attn_mask)
+            else: x = blk(x, None, attn_mask)
+                
+        x = self.proj_out(x[:,0]) #cls token
+        return x
+    
+    
+    
+class EncoderWithDirectionReconstructionV23(nn.Module):
+    def __init__(self, dim=384, dim_base=128, depth=8, use_checkpoint=False, head_size=64, **kwargs):
+        super().__init__()
+        self.extractor = ExtractorV11Scaled(dim_base,dim//2)
+        self.rel_pos = Rel_ds(head_size)
+        self.sandwich = nn.ModuleList([ 
+            Block_rel(dim=dim, num_heads=dim//head_size),
+            Block_rel(dim=dim, num_heads=dim//head_size),
+            Block_rel(dim=dim, num_heads=dim//head_size),
+            Block_rel(dim=dim, num_heads=dim//head_size),
+        ])
+        self.cls_token = nn.Linear(dim,1,bias=False)
+        self.blocks = nn.ModuleList([ 
+            Block(
+                dim=dim, num_heads=dim//head_size, mlp_ratio=4, drop_path=0.0*(i/(depth-1)), init_values=1,)
+            for i in range(depth)])
+        self.proj_out = nn.Linear(dim,3)
+        self.use_checkpoint = use_checkpoint
+        self.local_root= DynEdgeFEXTRACTRO(9, 
+                                           post_processing_layer_sizes = [336, dim//2], 
+                                           dynedge_layer_sizes = [(128, 256), (336, 256), (336, 256), (336, 256)])   
+        self.apply(self._init_weights)
+        trunc_normal_(self.cls_token.weight, std=.02)
+
+    def fix_init_weight(self):
+        def rescale(param, layer_id):
+            param.div_(math.sqrt(2.0 * layer_id))
+
+        for layer_id, layer in enumerate(self.blocks):
+            rescale(layer.attn.proj.weight.data, layer_id + 1)
+            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    def init_weights(self, pretrained=None):
+        def _init_weights(m):
+            if isinstance(m, nn.Linear):
+                trunc_normal_(m.weight, std=.02)
+                if isinstance(m, nn.Linear) and m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.LayerNorm):
+                nn.init.constant_(m.bias, 0)
+                nn.init.constant_(m.weight, 1.0)
+        self.apply(_init_weights)
+        
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'cls_token'}
+    
+    def forward(self, x0):
+        mask = x0['mask']
+        graph_featutre = torch.concat([x0["pos"][mask] , 
+                             x0['time'][mask].view(-1, 1),
+                             x0['auxiliary'][mask].view(-1, 1),
+                             x0['qe'][mask].view(-1, 1),
+                             x0['charge'][mask].view(-1, 1),
+                             x0["ice_properties"][mask], 
+                              ], dim=1)
+        Lmax = mask.sum(-1).max()
+        x = self.extractor(x0, Lmax)
+        rel_pos_bias, rel_enc = self.rel_pos(x0, Lmax)
+        #nbs = get_nbs(x0, Lmax)
+        mask = mask[:,:Lmax]
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = knn_graph(x = graph_featutre[:,:4], k=8, batch=batch_index).to(mask.device)
+        graph_featutre, _, _ = self.local_root(graph_featutre, edge_index, batch_index, x0['L0'])
+        graph_featutre, _ = to_dense_batch(graph_featutre, batch_index)
+        
+        B,_ = mask.shape
+        attn_mask = torch.zeros(mask.shape, device=mask.device)
+        attn_mask[~mask] = -torch.inf
+        x = torch.cat([x,graph_featutre],2)
+        
+        for blk in self.sandwich:
+            if isinstance(blk,LocalBlock):
+                x = blk(x,nbs,mask,rel_enc)
+            else:
+                x = blk(x,attn_mask,rel_pos_bias)
+                #rel_pos_bias = None
         mask = torch.cat([torch.ones(B,1,dtype=mask.dtype, device=mask.device),mask],1)
         attn_mask = torch.zeros(mask.shape, device=mask.device)
         attn_mask[~mask] = -torch.inf
