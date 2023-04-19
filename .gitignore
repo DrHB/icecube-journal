@@ -188,3 +188,5 @@ Iafoss/init5_dynedge.ipynb
 Iafoss/init5_hb_ft-2.ipynb
 .gitignore
 Iafoss/*
+*.zip
+hb_training_loop/*.zip
