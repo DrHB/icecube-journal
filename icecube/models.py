@@ -26,7 +26,7 @@ __all__ = ['DIST_KERNELS', 'SinusoidalPosEmb', 'EuclideanDistanceLossG', 'VonMis
            'EncoderWithDirectionReconstructionV18', 'EncoderWithDirectionReconstructionV19', 'DropPath', 'Mlp', 'Block',
            'Attention_rel', 'Block_rel', 'ExtractorV11', 'ScaledSinusoidalEmbedding', 'ExtractorV11Scaled', 'Rel_ds',
            'get_nbs', 'LocalBlock', 'EncoderWithDirectionReconstructionV20', 'EncoderWithDirectionReconstructionV22',
-           'EncoderWithDirectionReconstructionV23']
+           'EncoderWithDirectionReconstructionV23', 'OrganizerBaseline']
 
 # %% ../nbs/01_models.ipynb 1
 import sys
@@ -46,7 +46,7 @@ import numpy as np
 from graphnet.models.task.reconstruction import DirectionReconstructionWithKappa, AzimuthReconstructionWithKappa, ZenithReconstruction
 from graphnet.training.loss_functions import VonMisesFisher3DLoss,  VonMisesFisher2DLoss, EuclideanDistanceLoss
 from graphnet.training.labels import Direction
-from .modelsgraph import EGNNModeLFEAT, DynEdgeFEXTRACTRO
+from .modelsgraph import EGNNModeLFEAT, DynEdgeFEXTRACTRO, DynEdge, DynEdgeCustomForward
 from torch_geometric.nn.pool import knn_graph
 import torch.utils.checkpoint as checkpoint
 from einops import repeat
@@ -3005,3 +3005,30 @@ class EncoderWithDirectionReconstructionV23(nn.Module):
                 
         x = self.proj_out(x[:,0]) #cls token
         return x
+    
+class OrganizerBaseline(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = DynEdgeCustomForward(
+            nb_inputs=6,
+            nb_neighbours=8,
+            global_pooling_schemes=["min", "max", "mean", "sum"],
+            features_subset=slice(0, 3),  # NN search using xyz3
+        )
+        self.out = nn.Linear(self.encoder.nb_outputs,3)
+
+        
+
+        
+    def forward(self, x0):
+        mask = x0['mask']
+        graph_featutre = torch.concat([x0["pos"][mask] , 
+                             x0['time'][mask].view(-1, 1),
+                             x0['auxiliary'][mask].view(-1, 1),
+                             x0['charge'][mask].view(-1, 1)], dim=1)
+        Lmax = mask.sum(-1).max()
+        batch_index = mask.nonzero()[:,0] 
+        edge_index = knn_graph(x = graph_featutre[:,:3], k=8, batch=batch_index).to(mask.device)
+        out = self.encoder(graph_featutre, edge_index, batch_index, x0['L0'])
+        return self.out(out)
+        

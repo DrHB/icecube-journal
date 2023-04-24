@@ -22,7 +22,7 @@ def loss_vms(pred,y):
     cz2 = torch.cos(y['target'][:,1])
     t = torch.stack([sa2*sz2,ca2*sz2,cz2],-1)
     
-    p = pred.float()
+    p = pred.double()
     l = torch.norm(pred.float(),dim=-1).unsqueeze(-1)
     p = torch.cat([pred.float()/l,l],-1)
     
