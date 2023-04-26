@@ -1,12 +1,13 @@
 ### EXPERIMENTS
+The following repository includes my scripts, experiments, and notes that document my progress through the IceCube Neutrinos in Deep Ice challenge, which can be found on Kaggle [here](https://www.kaggle.com/competitions/icecube-neutrinos-in-deep-ice/overview)
 
-# Baseline 
-#make a table
+# Summary 
+
 
 | EXP_NAME | SCORE     | DESCRIPTION                                                                                                                        | SCRIPT                                        | TRN_SET |
 | :------- | :-------- | :--------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------- |:-------------------------------------------- |
-| EXP_00   | `1.182` | Baseline experiment, `6` Blocks of Transformer Encoder, number of events is restricted to 100                                        | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF`                | `(1, 600)` |
-| EXP_01   |  `1.169`         | Baseline experiment, `6` Blocks of Transformer Encoder, number of events is restricted to `100` , But I am doing pooling based on `mask` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V1` | `(1, 600)` |
+| EXP_00   | `1.182` | The initial trial involves using six blocks of Transformer Encoder with a limitation on the number of events to 100                                        | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF`                | `(1, 600)` |
+| EXP_01   |  `1.169`         | The initial test involves using six blocks of Transformer Encoder with a limitation of 100 events. However, I am implementing pooling that is based on a mask. | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V1` | `(1, 600)` |
 | EXP_02   | `1.144`        | Baseline experiment, `6` Blocks of Transformer Encoder, number of events is restricted to `100` , pooling on `mask` with `logLosh`  loss | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_HF_V2`         | `(1, 600)` |
 | EXP_03 |`nan` |Baseline experiment, `6` Blocks of Transformer Encoder, number of events is restricted to `100` , pooling on `mask` with `logLosh`  loss, in addition, no `log10` normalization for the charge. `sensor_id` now have there own learnable embeddings with `dim=128`,  `x`, `y` and `z` are normalized between `0` and `1`, time also normalized between `1` and `0`, added `weighted` feature based on time (total `event` features are now `14`). ref: https://www.kaggle.com/code/roberthatch/lb-1-183-lightning-fast-baseline-with-polars| `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V0` | `(1, 600)` |
 | EXP_04 | `1.216` -> `nan`  |Baseline experiment, `6` Blocks of Transformer Encoder, number of events is restricted to `100` , pooling on `mask` with `logLosh`  loss, in addition, no `log10` normalization for the charge. `sensor_id` now have there own learnable embeddings with `dim=128`,  `x`, `y` and `z` are normalized between `0` and `1`, time also normalized between `1` and `0` | `!CUDA_VISIBLE_DEVICES=0 python train.py --config_name BASELINE_EMBED_V1` | `(1, 600)` |
