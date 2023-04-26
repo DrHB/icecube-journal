@@ -1,7 +1,6 @@
-### EXPERIMENTS
+# Summary 
 The following repository includes my scripts, experiments, and notes that document my progress through the IceCube Neutrinos in Deep Ice challenge, which can be found on Kaggle [here](https://www.kaggle.com/competitions/icecube-neutrinos-in-deep-ice/overview)
 
-# Summary 
 
 
 | EXP_NAME | SCORE     | DESCRIPTION                                                                                                                        | SCRIPT                                        | TRN_SET |
