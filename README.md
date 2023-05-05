@@ -1,5 +1,5 @@
 # Summary 
-The following repository includes my scripts, experiments, and notes that document my progress through the IceCube Neutrinos in Deep Ice challenge, which can be found on Kaggle [here](https://www.kaggle.com/competitions/icecube-neutrinos-in-deep-ice/overview)
+The following repository includes my scripts, experiments, and notes that document my progress through the IceCube Neutrinos in Deep Ice challenge, which can be found on Kaggle [here](https://www.kaggle.com/competitions/icecube-neutrinos-in-deep-ice/overview). This work resulted in 2nd place the final repo can be found [here](https://github.com/DrHB/icecube-2nd-place)
 
 
 
